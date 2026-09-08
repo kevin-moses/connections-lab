@@ -1,0 +1,142 @@
+body {
+    margin: 0;
+    font-family: Tahoma, sans-serif;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    padding: 16px 32px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+}
+
+.navbar > * {
+    /* affect all children */
+    flex: 1;
+}
+
+.navbar-logo h1 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.navbar-search {
+    display: flex;
+    justify-content: center;
+}
+
+.navbar-search input {
+    width: 100%;
+    max-width: 280px;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.navbar-menu {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.navbar-menu ul {
+    display: flex;
+    gap: 24px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.navbar a {
+    color: #333;
+    text-decoration: none;
+}
+
+
+.landing {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #89CFF0;
+}
+
+.landing-text {
+    flex: 1;
+    padding-left: 150px;
+}
+@keyframes myAnimation {
+    from {background-color: #89CFF0;}
+    to {background-color: #ffffff;}
+  }
+
+.landing-buttons {
+    justify-content: center;
+}
+
+.landing-buttons button {
+    font-family: Tahoma, sans-serif;
+    font-weight: bold;
+    background: #fff;
+    color: #89CFF0;
+    border: none;
+    border-radius: 24px;
+    padding: 10px 20px;
+    font-size: 15px;
+    cursor: pointer;
+    animation-name: myAnimation;
+    animation-duration: 3s;
+}
+
+.landing-image {
+    flex-shrink: 0;
+    padding-left: 10px;
+}
+
+.landing-image img {
+    display: block;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    max-height: 800px;
+}
+
+.hero {
+    display: flex;
+    align-items: flex-start;
+    padding-top: 50px;
+}
+
+.hero-text,
+.hero-images {
+    flex: 1;
+}
+
+.hero-text {
+    padding-left: 150px;
+    padding-top: 200px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hero-images {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 200px;
+}
+
+.hero-images img {
+    display: block;
+}
+
+.shirt,
+.pants {
+    width: 200px;
+    height: 200px;
+}
+
+.shoes {
+    width: 100px;
+    height: 100px;
+}
