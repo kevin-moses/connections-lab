@@ -6,8 +6,8 @@
 //   tells it how far through the step the reader has scrolled (0 to 1).
 // - A scene sets a target position, opacity and colour for each dot it wants to show.
 //   Every other dot is hidden. Dots ease toward their targets, so changing steps animates.
-// - A scene can also pan the canvas vertically (targetPanY) and return a function that
-//   draws on top of the dots, such as a header.
+// - A scene can return a function that draws on top of the dots, such as a header.
+// - Scenes with a long timeline also pan the canvas vertically (see SCENE_PANS).
 // The "revisions" scene lives in revisions.js.
 
 // Which step is active; updated by scroll.js.
@@ -63,9 +63,11 @@ let familyNames = [];
 let firstEventTime;
 let lastEventTime;
 
-// vertical pan of the whole canvas in px; eased toward targetPanY each frame
+// vertical pan of the whole canvas in px (see SCENE_PANS)
 let panY = 0;
-let targetPanY = 0;
+
+// the step drawn last frame, to notice when the step changes
+let previousStepName = null;
 
 // the focus family's pages (in order of first use), their short labels, and its padded time range
 let focusPageNames = [];
@@ -140,6 +142,7 @@ function setup() {
             targetY: 0,
             alpha: 0,
             targetAlpha: 0,
+            isLeaving: false, // fading out in place after a step change (see draw)
             isGrey: true, // target: should the dot be grey?
             greyAmount: 1, // current blend: 0 = event colour, 1 = grey (eased so colour changes fade)
         });
@@ -222,6 +225,20 @@ function showFamilyGrid(alphaFor, isGreyFor) {
 }
 
 // scenes -------------------------------------------------------------------
+// How far down (in px) each long-timeline scene pans the canvas, given the scroll progress
+// through its step. Scenes not listed here don't pan.
+
+const SCENE_PANS = {
+    // progress 0 puts the start of the timeline on the reveal line, 1 puts the end there
+    revisions: revisionsPan, // revisions.js
+
+    // progress 0 shows the top of the timeline, 1 shows the bottom
+    family(progress) {
+        const visibleHeight = height - FOCUS_TIMELINE_TOP - MARGIN;
+        return progress * (height * FOCUS_TIMELINE_SCREENS - visibleHeight);
+    },
+};
+
 // One function per step, named after the step's data-step attribute in index.html.
 // Each receives `progress` (0 at the top of the step, 1 at the bottom) and sets targets for
 // the dots it shows; all other dots stay hidden. To add a scene, add a function here and a
@@ -250,9 +267,6 @@ const SCENES = {
 
     // Zoom into one family: x = page, y = time. Scrolling through the step pans down the timeline.
     family(progress) {
-        const visibleHeight = height - FOCUS_TIMELINE_TOP - MARGIN;
-        targetPanY = progress * (height * FOCUS_TIMELINE_SCREENS - visibleHeight);
-
         for (const dot of eventDots) {
             if (dot.data.family !== FOCUS_FAMILY) continue;
             dot.targetX = focusPageX(dot.pageIndex);
@@ -313,18 +327,42 @@ const SCENES = {
 
 // draw ---------------------------------------------------------------------
 
-// p5: runs every frame. Resets the per-frame defaults, runs the active scene, then draws the
-// revision dots, the event dots, the scene's overlay and the tooltip.
+// p5: runs every frame. Updates the pan, runs the active scene, then draws the revision
+// dots, the event dots, the scene's overlay and the tooltip.
 function draw() {
     background(17);
 
-    // defaults for this frame: no pan and nothing shown; the scene overrides what it needs
-    targetPanY = 0;
+    const stepName = scrollState.stepName;
+    const progress = activeStepProgress();
+
+    // Vertical pan. Within a step it eases toward its target, so scrolling feels smooth.
+    // When the step changes it jumps straight there instead: easing across a big pan change
+    // would drag every dot across the screen. Event dots are shifted by the same jump so they
+    // stay where they are on screen, then ease from there to their new places.
+    const panFor = SCENE_PANS[stepName];
+    const targetPanY = panFor ? panFor(progress) : 0;
+    const stepChanged = stepName !== previousStepName;
+    if (stepChanged) {
+        const jump = targetPanY - panY;
+        for (const dot of eventDots) {
+            dot.y += jump;
+            // A dot that's off screen would fly in from the edge. Hide it instead, so it
+            // fades in at its new place (hidden dots start at their target; see below).
+            const screenY = dot.y - targetPanY;
+            if (screenY < 0 || screenY > height) dot.alpha = 0;
+        }
+        panY = targetPanY;
+        previousStepName = stepName;
+    } else {
+        panY = lerp(panY, targetPanY, PAN_EASING);
+    }
+
+    // defaults for this frame: nothing shown; the scene overrides what it needs
     revealLineY = -Infinity; // hides every revision block (see revisions.js)
     for (const dot of eventDots) dot.targetAlpha = 0;
 
-    const scene = SCENES[scrollState.stepName] || SCENES.overview;
-    const drawOverlay = scene(activeStepProgress());
+    const scene = SCENES[stepName] || SCENES.overview;
+    const drawOverlay = scene(progress);
 
     const hoveredRevision = drawRevisionDots();
 
@@ -338,10 +376,28 @@ function draw() {
         // skip dots that are hidden and meant to stay hidden
         if (dot.targetAlpha === 0 && dot.alpha < 1) continue;
 
-        // ease toward the targets
-        dot.x = lerp(dot.x, dot.targetX, EASING);
-        dot.y = lerp(dot.y, dot.targetY, EASING);
-        dot.alpha = lerp(dot.alpha, dot.targetAlpha, EASING);
+        // On a step change, a visible dot whose new place is off screen would streak off the
+        // edge. Mark it as leaving: it fades out where it is, then reappears at its target.
+        if (stepChanged && dot.alpha >= 1) {
+            const targetScreenY = dot.targetY - panY;
+            if (targetScreenY < 0 || targetScreenY > height) dot.isLeaving = true;
+        }
+
+        if (dot.isLeaving) {
+            // fade out without moving
+            dot.alpha = lerp(dot.alpha, 0, EASING);
+            if (dot.alpha < 1) dot.isLeaving = false;
+        } else {
+            // a hidden dot starts at its target, so it fades in there instead of flying in
+            if (dot.alpha < 1) {
+                dot.x = dot.targetX;
+                dot.y = dot.targetY;
+            }
+            // ease toward the targets
+            dot.x = lerp(dot.x, dot.targetX, EASING);
+            dot.y = lerp(dot.y, dot.targetY, EASING);
+            dot.alpha = lerp(dot.alpha, dot.targetAlpha, EASING);
+        }
         const targetGrey = dot.isGrey ? 1 : 0;
         dot.greyAmount = lerp(dot.greyAmount, targetGrey, EASING);
         if (dot.alpha < 1) continue;
@@ -419,6 +475,4 @@ function draw() {
             text(lines[i], boxX + TOOLTIP.padding, lineY);
         }
     }
-
-    panY = lerp(panY, targetPanY, PAN_EASING);
 }

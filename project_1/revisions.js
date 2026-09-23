@@ -4,7 +4,7 @@
 // in one by one in random order, and they fade out again if you scroll back up past it.
 //
 // Loaded before sketch.js so SCENES can use revisionsScene. Uses these from sketch.js:
-// TICK_SECONDS, PLOT_LEFT, MARGIN, panY, targetPanY, formatUTC, setStepHeight, drawTimeTicks.
+// TICK_SECONDS, PLOT_LEFT, MARGIN, panY, formatUTC, setStepHeight, drawTimeTicks.
 
 const REVISIONS = {
     screensPerDay: 0.5, // timeline length per day, in screen heights (also sets the step's height)
@@ -36,6 +36,10 @@ let revealLineY = -Infinity;
 
 // Whether any revision dot was visible or still fading last frame.
 let anyRevisionVisible = false;
+
+// The pan used to place revision dots. Follows panY during the revisions step and stays put
+// after it, so the dots fade out where they are instead of jumping with the next step's pan.
+let revisionPanY = 0;
 
 // Build the revision dots and 6-hour blocks, and size the step to fit the timeline.
 // Called once from setup() in sketch.js.
@@ -91,16 +95,22 @@ function revisionTimeY(time) {
     return map(time, revisionsStart, revisionsEnd, 0, revisionTimelineScreens * height);
 }
 
-// Scene for the "revisions" step: pan the timeline with the scroll and place the reveal line.
+// Pan for the "revisions" step (used by SCENE_PANS in sketch.js): progress 0 puts the start of
+// the timeline on the reveal line, progress 1 puts the end there.
+function revisionsPan(progress) {
+    const timelineHeight = revisionTimelineScreens * height;
+    const lineScreenY = height * REVISIONS.revealLinePosition;
+    return progress * timelineHeight - lineScreenY;
+}
+
+// Scene for the "revisions" step: place the reveal line on the panned timeline.
 // Returns a function that draws the reveal line and the current date/time on top of the dots.
 function revisionsScene(progress) {
     const timelineHeight = revisionTimelineScreens * height;
     const lineScreenY = height * REVISIONS.revealLinePosition;
 
-    // progress 0 puts the start of the timeline on the reveal line, progress 1 puts the end there
-    targetPanY = progress * timelineHeight - lineScreenY;
-
     // use the current (eased) pan, so blocks appear as they visibly cross the line
+    revisionPanY = panY;
     revealLineY = panY + lineScreenY;
 
     drawTimeTicks(revisionsStart, revisionsEnd, revisionTimeY, 0);
@@ -165,7 +175,7 @@ function drawRevisionDots() {
         anyRevisionVisible = true;
 
         const x = PLOT_LEFT + dot.pageIndex * columnSpacing;
-        const y = (dot.data.t - revisionsStart) * pixelsPerSecond - panY;
+        const y = (dot.data.t - revisionsStart) * pixelsPerSecond - revisionPanY;
         const isOffScreen = y < -size || y > height + size;
         if (isOffScreen) continue;
 
