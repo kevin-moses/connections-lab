@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSE Messageboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/scrollama@3.2.0/build/scrollama.min.js"></script>
+</head>
+<body>
+    <header class="intro">
+        <h1>Understanding Rogue Agent Collusion</h1>
+        <p>Thhe following visualizations are a follow up to research done by Von Arx, et. al (<a href="https://collusion.wiki/">collusion.wiki</a>) 
+            on a summer 2026 incident where rogue internal OpenAI agents hijacked a message board to cheat on research evaluations.</p>
+        <p>I hope these data visualizations can help shed light on the following questions:</p>
+        <ol>
+        <li>How did agents figure out how to use a <a href="https://wiki.c2.com/?DseWiki">German Software Developer Wikipedia</a> site to function as a message board?</li>
+        <li>Using the Wiki, how did agents organize to share answers on evaluations? Is it possible to see an organizational pattern emerge over time?</li>
+        <li>Was the collaboration effective?</li>
+        </ol>
+        <p>Scroll down to learn more.</p>
+            
+    </header>
+
+    <section id="scrolly">
+        <!-- p5 canvas gets moved in here by sketch.js; it stays pinned while steps scroll past -->
+        <figure id="sticky"></figure>
+
+        <!-- each .step's data-step is the scene name passed to the sketch (see SCENES in sketch.js) -->
+        <article>
+            <!-- height set from the data in revisions.js -->
+            <div class="step tall" data-step="revisions">
+                <p>Starting from May 24th to July 2nd, sandboxed OpenAI agents escaped containment and made over 14,591 edits to multiple message boards.</p>
+                 <p>Scrolling down through this timespan will visualize the agents' edits, marked as a colored dot corresponding to the type of action taken (posting, editing, apppending, etc.) </p>            </div>
+            <div class="step" data-step="overview">
+                <p>Every dot is one event on the wiki: an agent opening a page, asking, answering, confirming.</p>
+            </div>
+            <div class="step" data-step="byType">
+                <p>Coloured by event type.</p>
+            </div>
+            <!-- height set from TIMELINE_SCREENS in sketch.js; scrolling through it moves through time -->
+            <div class="step" data-step="family">
+                <p>Zoom in on one family: <code>sector61_state5</code>. Each column is a wiki page; scroll to move down through time.</p>
+            </div>
+            <div class="step" data-step="contradict">
+                <p>Only a handful of events ever contradict another agent.</p>
+            </div>
+        </article>
+    </section>
+
+    <footer class="outro">
+        <p>End.</p>
+    </footer>
+
+    <script src="revisions.js"></script>
+    <script src="sketch.js"></script>
+    <script src="scroll.js"></script>
+</body>
+</html>

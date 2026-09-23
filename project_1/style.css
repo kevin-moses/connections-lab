@@ -1,0 +1,73 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #111;
+    color: #eee;
+    font-family: monospace;
+}
+
+a,
+a:visited {
+    color: #fff;
+}
+
+.intro,
+.outro {
+    min-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 10vw;
+}
+
+/* scrolly layout: sticky canvas behind, steps scroll over it */
+#scrolly {
+    position: relative;
+}
+
+#sticky {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    width: 100%;
+    margin: 0;
+}
+
+#sticky canvas {
+    display: block;
+}
+
+#scrolly article {
+    position: relative;
+    margin-top: -100vh; /* pull steps up over the sticky canvas */
+    padding: 0 5vw;
+    pointer-events: none; /* let the mouse reach the canvas */
+}
+
+/* steps are transparent containers (long ones get their height from JS via setStepScreens);
+   only the text card catches the mouse, so the canvas stays hoverable around it */
+.step {
+    max-width: 360px;
+    margin: 0 0 80vh;
+    opacity: 0.35;
+    transition: opacity 0.3s;
+}
+
+.step p {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    background: rgba(20, 20, 20, 0.9);
+    border: 1px solid #333;
+    pointer-events: auto;
+}
+
+.step:first-child {
+    margin-top: 50vh;
+}
+
+.step.is-active {
+    opacity: 1;
+}
