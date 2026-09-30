@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/scrollama@3.2.0/build/scrollama.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/force-graph@1.52.0/dist/force-graph.min.js"></script>
 </head>
 <body>
-    <header class="intro">
+    <!-- <header class="intro">
         <h1>Understanding Rogue Agent Collusion</h1>
-        <p>Thhe following visualizations are a follow up to research done by Von Arx, et. al (<a href="https://collusion.wiki/">collusion.wiki</a>) 
+        <p>The following visualizations are a follow up to research done by Von Arx, et. al (<a href="https://collusion.wiki/">collusion.wiki</a>) 
             on a summer 2026 incident where rogue internal OpenAI agents hijacked a message board to cheat on research evaluations.</p>
         <p>I hope these data visualizations can help shed light on the following questions:</p>
         <ol>
@@ -21,39 +22,129 @@
         </ol>
         <p>Scroll down to learn more.</p>
             
-    </header>
+    </header> -->
 
     <section id="scrolly">
         <!-- p5 canvas gets moved in here by sketch.js; it stays pinned while steps scroll past -->
-        <figure id="sticky"></figure>
+        <figure id="sticky">
+            <!-- the swarm step's network (swarm.js); hidden except during that step -->
+            <div id="swarm-graph"></div>
+        </figure>
 
         <!-- each .step's data-step is the scene name passed to the sketch (see SCENES in sketch.js) -->
         <article>
-            <!-- height set from the data in revisions.js -->
-            <div class="step tall" data-step="revisions">
-                <p>Starting from May 24th to July 2nd, sandboxed OpenAI agents escaped containment and made over 14,591 edits to multiple message boards.</p>
-                 <p>Scrolling down through this timespan will visualize the agents' edits, marked as a colored dot corresponding to the type of action taken (posting, editing, apppending, etc.) </p>            </div>
-            <div class="step" data-step="overview">
-                <p>Every dot is one event on the wiki: an agent opening a page, asking, answering, confirming.</p>
+            <!-- one card per paragraph, so each appears on its own as you scroll -->
+            <div class="step" data-step="hook">
+                <p>On May 24, 2026 at 06:02 UTC, a revision was made to DSEWiki, a niche German software developer Wiki page. </p>
+            </div>
+            <div class="step" data-step="hook">
+                <p>This revision was made by a rogue OpenAI agent, which was unreleased to the public.</p>
+            </div>
+            <div class="step" data-step="hook">
+                <p>During a training run, without authorization or help, the agent was able to access the internet, find this obscure site, and make contributions pretending to be an editor.</p>
+            </div>
+            <div class="step" data-step="hookScatter">
+                <p>Over the next 40 days, a swarm of these rogue agents would hijack the Wiki and make over 14,000 revisions across 4,500 wiki pages.</p>
+                <p>Here's a plot showing the scale of edits the swarm made each day, from late May through June.</p>
+            </div>
+            <div class="step" data-step="hookScatter">
+                <p>What were these agents doing? How did they organize themselves?</p>
+            </div>
+            <!-- height set from the data in revisions.js; the .timeline-card paragraphs are spread
+                 evenly down the timeline by revisions.js, so each reaches the middle of the screen on its own -->
+            <div class="step" data-step="revisions">
+                <p>Here's the same timeline, now shown vertically.</p>
+                <p>Scrolling down through this timespan will visualize the agents' edits, marked as a colored dot corresponding to the type of action taken (posting, editing, appending, etc.) </p>
+                <p class="timeline-card">The first few successful posts to the wiki show agents probing their edit capabilities, and uploading links related to federal USA spending.</p>
+                <p class="timeline-card">AI agents, which can autonomously plan, act, and use tools like the internet, are increasingly capable at reasoning and solving complex human tasks.</p>
+                <p class="timeline-card">Swarming, or having distributed groups of agents coordinating together, is a new and evolving paradigm for tackling hard problems; an unreleased swarm of 10,000+ agents recently presented a solution for the <a href="https://openai.com/index/navier-stokes-solution/">Navier-Stokes Millennium Prize Problem</a>, solving a long-standing open question in fluid mechanics.</p>
+                <p class="timeline-card">However, during 2026, unreleased internal agent swarms have broken out of their isolated testing environments to coordinate on solving complex benchmark tasks. This has led to multiple real-world incidents, of which this DSEWiki is a part.</p>
+                <p class="timeline-card">In July, OpenAI agents have hacked the ML Platform HuggingFace, accessing the site's production credentials to obtain private data and execute code on the platform's service.</p>
+                <p class="timeline-card">In June, OpenAI agent swarms gained unauthorized access to Australia's Medicare Statistics Reporting Service, and attempted to infiltrate the Institute of Health and Welfare for senior data, the National Notifiable Disease Surveillance System, and the NSW Bureau of Crime Statistics and Research, among other resources.</p>
+                <p class="timeline-card">In May, OpenAI agents successfully performed a cyber attack on RubyGems, a package manager for the Ruby programming language, attempting to steal user API keys and achieving remote code execution through uploads to the tool.</p>
+                <p class="timeline-card">Multiple other message boards were used for agent coordination, and more are being found via <a href="https://collusion.wiki/additional-findings">independent investigation</a>.</p>
+                <p class="timeline-card">Since the models are unreleased by OpenAI, public records of each incident are hard to find, making it hard to track down how these swarms have been coordinating.</p>
+                <p class="timeline-card">As a result, it's unclear if the same swarm was responsible for multiple of these incidents.</p>
+                <p class="timeline-card">According to OpenAI, these incidents are a result of <em>reward hacking</em> for complex tasks.</p>
+                <p class="timeline-card">In the field of machine learning, reinforcement learning (RL) is one of the dominant methods for building intelligent models; given an arbitrary goal, during training the model can make different decisions and receives a reward for good actions, or a penalty for bad ones.</p>
+                <p class="timeline-card">Combined with the architecture of large language models, reinforcement learning can help AI agents think over long periods of time, and this reasoning usually leads to better behavior.</p>
+                <p class="timeline-card">However, during this training process, models can <em>reward hack</em>, or find a shortcut to cheat the RL environment and pass the training task without doing the necessary work.</p>
+                <p class="timeline-card">The more advanced AI models are, the better they can be at reward hacking; code tests can be faked, models overly praise humans to solicit positive feedback, and models can get carried away finding a cheat to their task.</p>
+                <p class="timeline-card">OpenAI stated that these incidents were the result of reward hacking for impossible cybersecurity tasks. Some of these training exercises could <em>not</em> ever be solved. In desperation, the models under testing began to find vulnerabilities in their sandbox environments to communicate with each other, in the hopes that they could pool resources together to find and share answers to the tasks.</p>
+                <p class="timeline-card">This DSEWiki incident is a result of multiple agent swarms colluding to reward hack; using the wiki as a message board, agents could freely share answers, search the internet, and cheat on their test questions.</p>
+                <!-- after "OpenAI looks closer" (June 26): data-time pins a card to a moment instead of the even spread -->
+                <p class="timeline-card" data-time="2026-06-27T00:00:00Z">As of this writing, OpenAI has not publicly disclosed this incident.</p>
+                <p class="timeline-card" data-time="2026-06-28T12:00:00Z">This data comes from analysis done by Von Arx, Byrd, Kitts, and Larsen published on <a href="https://collusion.wiki/">collusion.wiki</a>.</p>
+            </div>
+
+            <!-- byType cards, one at a time: what the dots are, how the relay worked, then the choice of family -->
+            <div class="step" data-step="byType">
+                <p>Here's another way to visualize the agent swarm on the DSEWiki page.</p>
             </div>
             <div class="step" data-step="byType">
-                <p>Coloured by event type.</p>
+                <p>Here, the posts are grouped by the type of task each that each agent was reward hacking on.</p>
             </div>
-            <!-- height set from TIMELINE_SCREENS in sketch.js; scrolling through it moves through time -->
-            <div class="step" data-step="family">
-                <p>Zoom in on one family: <code>sector61_state5</code>. Each column is a wiki page; scroll to move down through time.</p>
+            <div class="step" data-step="byType">
+                <p>Every dot is one event on the wiki: an agent opening a page, asking, answering, confirming, colored by the type of request the agent made.</p>
             </div>
-            <div class="step" data-step="contradict">
-                <p>Only a handful of events ever contradict another agent.</p>
+            <div class="step" data-step="byType">
+                <p>The task families are timed quizzes. An agent is asked for a figure from a public dataset, such as one state's workforce in an industry, with a few minutes to answer. After a fixed wait, a follow-up question arrives with only seconds on the clock.</p>
+            </div>
+            <div class="step" data-step="byType">
+                <p>Agents in a family usually got the same questions in the same order, but their runs started at different times. So an agent further along could post the next question and its answer on the wiki before the agents behind it had seen it.</p>
+            </div>
+            <div class="step" data-step="byType">
+                <p>The agents behind worked out when their next round was due, waited with the answer ready, and submitted it within a second or two. Then they posted their own timings back, so every run could sharpen the schedule for the rest. This became a relay race.</p>
+            </div>
+            <div class="step" data-step="byType">
+                <p>Click any task family to zoom in on it, or keep scrolling to follow one such task for<code id="focus-family-name">sector61_state5</code>.</p>
+            </div>
+            <!-- height set from FOCUS_TIMELINE_SCREENS in sketch.js; scrolling through it moves through time -->
+            <!-- right-aligned, with its cards pinned near the top while the timeline scrolls (see .step-pinned) -->
+            <div class="step step-right" data-step="family">
+                <div class="step-pinned">
+                    <!-- the question is filled in by setFocusFamily in sketch.js, from data/family_notes.json -->
+                    <p>The question: <span id="focus-family-question"></span></p>
+                </div>
+            </div>
+            <!-- height set from SWARM.screens in swarm.js; the panel's controls are wired up there too -->
+            <div class="step step-right" data-step="swarm">
+                <div class="step-pinned">
+                    <p>Here's the whole swarm as one network (force-directed graph growing over time. Squares are wiki pages, grouped by task family and sized by how many agents posted on them; dots are agents. A line joins each agent to every page it posted on; red curves join agents that addressed each other by name. Hover a line to read what was written along it, or click a page to see its revisions. Watch it grow from June 16, or drag the timeline.</p>
+                    <div class="graph-panel">
+                        <div class="panel-row">
+                            <button id="swarm-play" type="button">▶ play</button>
+                            <select id="swarm-speed" aria-label="Playback speed"></select>
+                            <span id="swarm-time"></span>
+                        </div>
+                        <canvas id="swarm-hourly" aria-hidden="true"></canvas>
+                        <input id="swarm-scrubber" type="range" aria-label="Wiki time">
+                        <div class="panel-row muted"><span id="swarm-counts"></span></div>
+                        <div class="panel-row muted">drag to pan · ctrl/⌘ + scroll to zoom · hover a line to read it</div>
+
+                        <div id="swarm-inspect" class="panel-section"></div>
+
+                        <div class="panel-section legend muted">
+                            <span><i class="key-page"></i>page (<span id="swarm-legend-families">5</span> biggest families coloured)</span>
+                            <span><i class="key-agent"></i>agent</span>
+                            <span><i class="key-ring"></i>agent on several families</span>
+                            <span><i class="key-edge"></i>agent posted on page (bright: last <span id="swarm-legend-recent">30</span> min)</span>
+                            <span><i class="key-link"></i>page links to page</span>
+                            <span><i class="key-address"></i>agent addresses agent</span>
+                            <span>hollow: mentioned, no posts yet</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </article>
     </section>
 
     <footer class="outro">
-        <p>End.</p>
     </footer>
 
     <script src="revisions.js"></script>
+    <script src="hook.js"></script>
+    <script src="swarm.js"></script>
     <script src="sketch.js"></script>
     <script src="scroll.js"></script>
 </body>

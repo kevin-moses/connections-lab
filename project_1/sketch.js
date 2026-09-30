@@ -8,10 +8,11 @@
 //   Every other dot is hidden. Dots ease toward their targets, so changing steps animates.
 // - A scene can return a function that draws on top of the dots, such as a header.
 // - Scenes with a long timeline also pan the canvas vertically (see SCENE_PANS).
-// The "revisions" scene lives in revisions.js.
+// The "revisions" scene lives in revisions.js, the "hook" scene in hook.js, and the "swarm"
+// scene (a force-graph network drawn on its own canvas, over this one) in swarm.js.
 
-// Which step is active; updated by scroll.js.
-const scrollState = { stepName: "revisions", stepIndex: 0 };
+// Which step is active; set from the page by scroll.js.
+const scrollState = { stepName: null, stepIndex: 0 };
 
 // layout
 const MARGIN = 60;
@@ -33,14 +34,32 @@ const TOOLTIP = {
 };
 
 // the zoomed-in "family" scene
-const FOCUS_FAMILY = "sector61_state5";
+const DEFAULT_FOCUS_FAMILY = "sector61_state5"; // shown unless the reader clicks another family in byType
 const PAGE_HEADER_HEIGHT = 130; // space at the top for the rotated page names
 const FOCUS_TIMELINE_TOP = PAGE_HEADER_HEIGHT + 20; // timeline y of the first moment
 const FOCUS_TIMELINE_SCREENS = 4; // timeline length in screen heights (also sets the step's height)
-const FOCUS_TIME_PADDING = 12 * 3600; // seconds of empty time before the first and after the last event
+// empty time before the first and after the last event: 10% of the family's time span, 5 minutes to 12 hours
+const FOCUS_TIME_PADDING_SHARE = 0.1;
+const FOCUS_TIME_PADDING_MAX = 12 * 3600;
+const FOCUS_TIME_PADDING_MIN = 5 * 60; // so a family whose posts share one moment still has a timeline
+// time ticks: the longest of these intervals (seconds) that still gives at least FOCUS_MIN_TICKS ticks
+const FOCUS_TICK_CHOICES = [6 * 3600, 3 * 3600, 3600, 30 * 60, 15 * 60, 10 * 60, 5 * 60];
+const FOCUS_MIN_TICKS = 8;
+
+// pop-up callouts: revision moments (revisions.js) and family events (setFocusFamily); see drawCallout
+const CALLOUT = {
+    width: 280,
+    padding: 10,
+    textSize: 11,
+    lineHeight: 15,
+    gap: 16, // between a circled dot and its box, and between the plot and the pinned text cards
+    stackGap: 6, // between stacked boxes (see the minTop argument of drawCallout)
+    ringSize: 12, // diameter of the circle around a dot
+};
 
 // time axis: one tick line every 6 hours (also the size of the revisions reveal blocks)
 const TICK_SECONDS = 6 * 3600;
+const DAY_SECONDS = 24 * 3600;
 
 const EVENT_COLORS = {
     open: "#6c8ebf",
@@ -56,6 +75,9 @@ const EVENT_COLORS = {
 // loaded data
 let taskData;
 let revisionData;
+let revisionMomentsData; // the revisions timeline's pop-ups (see revisions.js)
+let familyNotes; // each task family's question and labelled posts (see setFocusFamily)
+let swarmData;
 
 // task events: one dot per event, plus the family rows and time range they're laid out on
 let eventDots = [];
@@ -66,87 +88,134 @@ let lastEventTime;
 // vertical pan of the whole canvas in px (see SCENE_PANS)
 let panY = 0;
 
-// the step drawn last frame, to notice when the step changes
+// the step drawn last frame, to notice when the step changes, and when (millis) it last did
 let previousStepName = null;
+let stepChangedAt = 0;
 
-// the focus family's pages (in order of first use), their short labels, and its padded time range
+// the family the "family" scene zooms into (see setFocusFamily), its pages (in order of first
+// use), their short labels, and its padded time range
+let focusFamily;
 let focusPageNames = [];
 let focusPageLabels = [];
 let focusTimelineStart;
 let focusTimelineEnd;
+let focusTickSeconds; // time between tick lines in the family scene
+let focusMoments = []; // the focus family's labelled posts (from familyNotes), each with its dot
 
-// p5: load both data files before setup() runs.
+// p5: load the data files before setup() runs.
 function preload() {
     taskData = loadJSON("data/task_timelines.json");
     revisionData = loadJSON("data/revision_timeline.json");
+    revisionMomentsData = loadJSON("data/revision_moments.json");
+    familyNotes = loadJSON("data/family_notes.json");
+    swarmData = loadJSON("data/swarm_graph.json");
 }
 
-// p5: create the canvas and turn every task event into a dot.
+// p5: create the canvas and set up every scene's data.
 function setup() {
     const canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent("sticky");
     textFont("monospace");
 
-    setupRevisions(revisionData);
-    setStepHeight("family", FOCUS_TIMELINE_SCREENS);
+    setupRevisions(revisionData, revisionMomentsData); // revisions.js
+    setupHook(revisionData); // hook.js
+    setupSwarm(swarmData); // swarm.js
+    setupEventDots(taskData);
+    setupFamilyStep();
+}
 
-    const events = taskData.events;
-
+// One dot per task event, plus the family rows and the time range they're laid out on.
+function setupEventDots(json) {
     // family rows, in the order the data lists them
-    familyNames = [];
-    const familyIndexByName = new Map();
-    for (const family of taskData.families) {
-        familyIndexByName.set(family.family, familyNames.length);
-        familyNames.push(family.family);
-    }
+    familyNames = json.families.map((family) => family.family);
 
     // time range of all events
-    firstEventTime = Infinity;
-    lastEventTime = -Infinity;
-    for (const event of events) {
-        firstEventTime = Math.min(firstEventTime, event.t);
-        lastEventTime = Math.max(lastEventTime, event.t);
-    }
+    const times = json.events.map((event) => event.t);
+    firstEventTime = Math.min(...times);
+    lastEventTime = Math.max(...times);
 
-    // the focus family's pages, in the order they were first used
-    const focusEvents = events.filter((event) => event.family === FOCUS_FAMILY);
-    focusEvents.sort((a, b) => a.t - b.t);
-    focusPageNames = [];
-    focusPageLabels = [];
-    const focusPageIndexByName = new Map();
-    for (const event of focusEvents) {
-        if (focusPageIndexByName.has(event.page)) continue;
-        focusPageIndexByName.set(event.page, focusPageNames.length);
-        focusPageNames.push(event.page);
-        // short label: drop the "dse/" prefix and cut to 20 characters
-        focusPageLabels.push(event.page.replace("dse/", "").slice(0, 20));
-    }
-    focusTimelineStart = focusEvents[0].t - FOCUS_TIME_PADDING;
-    focusTimelineEnd = focusEvents[focusEvents.length - 1].t + FOCUS_TIME_PADDING;
-
-    // one dot per event
-    eventDots = [];
-    for (const event of events) {
+    eventDots = json.events.map((event) => {
         const hex = EVENT_COLORS[event.event] || "#ffffff";
-        eventDots.push({
+        return {
             data: event, // the original record (shown in the tooltip)
             type: event.event,
-            familyIndex: familyIndexByName.get(event.family),
-            pageIndex: focusPageIndexByName.get(event.page), // only used for focus-family dots
+            familyIndex: familyNames.indexOf(event.family),
+            pageIndex: 0, // column in the family scene; set for the focus family by setFocusFamily
             color: hex,
-            // the same colour as [red, green, blue] numbers, for blending toward grey
-            colorRgb: [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)],
+            colorRgb: hexToRgb(hex), // for blending toward grey
             x: width / 2,
             y: height / 2,
             targetX: 0,
             targetY: 0,
             alpha: 0,
             targetAlpha: 0,
-            isLeaving: false, // fading out in place after a step change (see draw)
+            isLeaving: false, // fading out in place after a step change (see drawEventDots)
             isGrey: true, // target: should the dot be grey?
             greyAmount: 1, // current blend: 0 = event colour, 1 = grey (eased so colour changes fade)
-        });
+        };
+    });
+}
+
+// The family step: its height, its pinned cards just below the page-name header (where its
+// timeline starts), where its page columns end, and the family it starts on.
+function setupFamilyStep() {
+    setStepHeight("family", FOCUS_TIMELINE_SCREENS);
+    pinnedCards("family").style.setProperty("--pinned-top", `${FOCUS_TIMELINE_TOP}px`); // see .step-pinned
+    updateFocusPlotRight();
+    setFocusFamily(DEFAULT_FOCUS_FAMILY);
+}
+
+// "#6c8ebf" → [108, 142, 191]
+function hexToRgb(hex) {
+    return [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
+}
+
+// Make `familyName` the family the "family" scene zooms into: work out its pages (in the order
+// they were first used), their labels and its time range, give its dots their page columns, and
+// show its name in the family step's text.
+function setFocusFamily(familyName) {
+    focusFamily = familyName;
+    const focusDots = eventDots.filter((dot) => dot.data.family === familyName);
+    focusDots.sort((a, b) => a.data.t - b.data.t);
+
+    focusPageNames = [];
+    focusPageLabels = [];
+    const focusPageIndexByName = new Map();
+    for (const dot of focusDots) {
+        const page = dot.data.page;
+        if (!focusPageIndexByName.has(page)) {
+            focusPageIndexByName.set(page, focusPageNames.length);
+            focusPageNames.push(page);
+            // short label: drop the "dse/" prefix and cut to 20 characters
+            focusPageLabels.push(page.replace("dse/", "").slice(0, 20));
+        }
+        dot.pageIndex = focusPageIndexByName.get(page);
     }
+    const firstTime = focusDots[0].data.t;
+    const lastTime = focusDots[focusDots.length - 1].data.t;
+    const share = (lastTime - firstTime) * FOCUS_TIME_PADDING_SHARE;
+    const padding = constrain(share, FOCUS_TIME_PADDING_MIN, FOCUS_TIME_PADDING_MAX);
+    focusTimelineStart = firstTime - padding;
+    focusTimelineEnd = lastTime + padding;
+    const timelineSeconds = focusTimelineEnd - focusTimelineStart;
+    const givesEnoughTicks = (seconds) => timelineSeconds / seconds >= FOCUS_MIN_TICKS;
+    focusTickSeconds = FOCUS_TICK_CHOICES.find(givesEnoughTicks) ?? FOCUS_TICK_CHOICES.at(-1);
+
+    // its question and labelled posts (data/family_notes.json), each matched to its dot by time and
+    // agent name: `moments` (at most five) point at posts by `iso` time and agent `label`, exactly
+    // as they appear in task_timelines.json
+    const notes = familyNotes[familyName] || { question: "", moments: [] };
+    focusMoments = [];
+    for (const moment of notes.moments) {
+        const time = parseUTC(moment.iso);
+        const dot = focusDots.find((d) => d.data.t === time && d.data.label === moment.label);
+        if (dot) focusMoments.push({ text: moment.text, dot });
+        else console.warn(`family_notes.json: no ${familyName} post at ${moment.iso} by ${moment.label}`);
+    }
+    focusMoments.sort((a, b) => a.dot.data.t - b.dot.data.t);
+
+    document.getElementById("focus-family-name").textContent = familyName;
+    document.getElementById("focus-family-question").textContent = notes.question;
 }
 
 // Make a step `screens` screen-heights tall, so scrolling through it takes that long.
@@ -158,9 +227,46 @@ function setStepHeight(stepName, screens) {
 // p5: keep the canvas the size of the window.
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
+    updateFocusPlotRight();
+    resizeSwarm(); // swarm.js
+}
+
+// p5: in the byType scene, clicking a family's row zooms in on that family by scrolling to the
+// family step.
+function mousePressed() {
+    if (scrollState.stepName !== "byType") return;
+    const familyIndex = familyRowUnderMouse();
+    if (familyIndex === -1) return;
+    setFocusFamily(familyNames[familyIndex]);
+    scrollToStep("family"); // scroll.js
 }
 
 // helpers ------------------------------------------------------------------
+
+// Word-wrap each paragraph to fit within maxLineWidth px at the current text size. Returns the
+// lines; every paragraph starts on a new line.
+function wrapParagraphs(paragraphs, maxLineWidth) {
+    const lines = [];
+    for (const paragraph of paragraphs) {
+        let currentLine = "";
+        for (const word of paragraph.split(" ")) {
+            const longerLine = currentLine === "" ? word : currentLine + " " + word;
+            if (currentLine !== "" && textWidth(longerLine) > maxLineWidth) {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                currentLine = longerLine;
+            }
+        }
+        lines.push(currentLine);
+    }
+    return lines;
+}
+
+// Parse an ISO date string (e.g. "2026-06-16T09:33:05Z") into unix time in seconds.
+function parseUTC(iso) {
+    return Date.parse(iso) / 1000;
+}
 
 // Format a unix time (in seconds) as "YYYY-MM-DD HH:MM" in UTC.
 function formatUTC(seconds) {
@@ -168,29 +274,147 @@ function formatUTC(seconds) {
     return iso.slice(0, 10) + " " + iso.slice(11, 16);
 }
 
+// Draw a callout for screen y: a circle around each point in `rings` ({ x, y }), and a box of
+// `paragraphs` ({ text, grey }, each word-wrapped) beside the first ring, right of it if there's
+// room and otherwise left, moved clear of the text cards on screen if it would cover them, and
+// joined to each ring by a line. With no rings, the box sits at the
+// plot's right edge with a line across the plot to it. The box's top lines up with y unless that
+// is above minTop (to keep clear of a box above). `alpha` (0 to 1) fades it all in, and the box
+// rises into place as it does. Returns the box's bottom edge (or minTop if it's off screen).
+function drawCallout(rings, y, paragraphs, alpha, minTop = -Infinity) {
+    const boxWidth = CALLOUT.width;
+    const plotRight = width - MARGIN;
+    textSize(CALLOUT.textSize);
+    const lines = [];
+    for (const paragraph of paragraphs) {
+        for (const line of calloutLines(paragraph.text)) lines.push({ text: line, grey: paragraph.grey });
+    }
+    const boxHeight = lines.length * CALLOUT.lineHeight + 2 * CALLOUT.padding;
+    const settledY = Math.max(y - CALLOUT.lineHeight, minTop);
+    if (settledY > height || settledY + boxHeight < 0) return minTop; // off screen
+
+    let boxX = plotRight - boxWidth;
+    if (rings.length > 0) {
+        // try beside the ring (right, then left), then either side of the text cards; take the
+        // first spot that doesn't cover the cards
+        const firstX = rings[0].x;
+        const cards = visibleCardsBox();
+        const candidates = [firstX + CALLOUT.gap, firstX - CALLOUT.gap - boxWidth];
+        if (cards) candidates.push(cards.right + CALLOUT.gap, cards.left - CALLOUT.gap - boxWidth);
+        const spots = candidates.map((x) => constrain(x, PLOT_LEFT, plotRight - boxWidth));
+        const coversCards = (x) => {
+            if (!cards) return false;
+            const overlapsAcross = x < cards.right && x + boxWidth > cards.left;
+            const overlapsDown = settledY < cards.bottom && settledY + boxHeight > cards.top;
+            return overlapsAcross && overlapsDown;
+        };
+        boxX = spots.find((x) => !coversCards(x)) ?? spots[0];
+    }
+    const boxY = settledY + (1 - alpha) * 10;
+
+    // circle each point and join it to the nearest side of the box, level with it if it can be
+    noFill();
+    const ringEdge = CALLOUT.ringSize / 2;
+    for (const ring of rings) {
+        stroke(255, 255 * alpha);
+        circle(ring.x, ring.y, CALLOUT.ringSize);
+        stroke(255, 90 * alpha);
+        const joinY = constrain(ring.y, boxY + CALLOUT.padding, boxY + boxHeight - CALLOUT.padding);
+        if (ring.x < boxX) line(ring.x + ringEdge, ring.y, boxX, joinY);
+        else if (ring.x > boxX + boxWidth) line(ring.x - ringEdge, ring.y, boxX + boxWidth, joinY);
+    }
+    if (rings.length === 0) {
+        stroke(255, 90 * alpha);
+        line(PLOT_LEFT - 10, y, boxX, y);
+    }
+
+    fill(0, 220 * alpha);
+    stroke(80, 255 * alpha);
+    rect(boxX, boxY, boxWidth, boxHeight);
+
+    noStroke();
+    textAlign(LEFT, TOP);
+    for (let i = 0; i < lines.length; i++) {
+        fill(lines[i].grey, 255 * alpha);
+        text(lines[i].text, boxX + CALLOUT.padding, boxY + CALLOUT.padding + i * CALLOUT.lineHeight);
+    }
+    return settledY + boxHeight;
+}
+
+// A callout paragraph word-wrapped to the box's width. The texts never change and the box is a
+// fixed size, so each is wrapped once and remembered.
+const calloutLineCache = new Map();
+function calloutLines(text) {
+    if (!calloutLineCache.has(text)) {
+        calloutLineCache.set(text, wrapParagraphs([text], CALLOUT.width - 2 * CALLOUT.padding));
+    }
+    return calloutLineCache.get(text);
+}
+
+// The screen box ({ left, right, top, bottom }) around the active step's text cards that are on
+// screen, or null if none are. Measured once per frame, however many callouts ask.
+let cardsBoxFrame = -1;
+let cardsBox = null;
+function visibleCardsBox() {
+    if (cardsBoxFrame === frameCount) return cardsBox;
+    cardsBoxFrame = frameCount;
+    let box = null;
+    for (const card of stepElements[scrollState.stepIndex].querySelectorAll("p")) {
+        const rect = card.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+        if (!box) box = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+        box.left = Math.min(box.left, rect.left);
+        box.right = Math.max(box.right, rect.right);
+        box.top = Math.min(box.top, rect.top);
+        box.bottom = Math.max(box.bottom, rect.bottom);
+    }
+    cardsBox = box;
+    return box;
+}
+
 // Screen y of a family's row in the family grid.
 function familyRowY(familyIndex) {
     return map(familyIndex, 0, familyNames.length - 1, MARGIN, height - MARGIN);
 }
 
-// Screen x of a page column in the family scene.
+// Screen x of a page column in the family scene. A family with one page gets one centred column.
 function focusPageX(pageIndex) {
-    return map(pageIndex, 0, focusPageNames.length - 1, PLOT_LEFT, width - MARGIN);
+    if (focusPageNames.length === 1) return (PLOT_LEFT + focusPlotRight) / 2;
+    return map(pageIndex, 0, focusPageNames.length - 1, PLOT_LEFT, focusPlotRight);
+}
+
+// Where the family scene's page columns end: left of the step's pinned cards (which sit on the
+// right), unless that would leave the columns less than half the screen.
+let focusPlotRight;
+function updateFocusPlotRight() {
+    focusPlotRight = Math.min(spaceLeftOfPinnedCards("family") - CALLOUT.gap, width - MARGIN);
+}
+
+// A step's pinned text cards (the .step-pinned block), and the screen x where they start if they sit
+// on the right half of the screen (on a narrow screen they span it, so this is the full width).
+function pinnedCards(stepName) {
+    return document.querySelector(`[data-step="${stepName}"] .step-pinned`);
+}
+function spaceLeftOfPinnedCards(stepName) {
+    const cardsLeft = pinnedCards(stepName).getBoundingClientRect().left;
+    return cardsLeft > window.innerWidth / 2 ? cardsLeft : window.innerWidth;
 }
 
 // Timeline y of a moment in the family scene (subtract panY to get screen y).
 function focusTimeY(time) {
     const timelineHeight = height * FOCUS_TIMELINE_SCREENS;
-    return map(time, focusTimelineStart, focusTimelineEnd, FOCUS_TIMELINE_TOP, FOCUS_TIMELINE_TOP + timelineHeight);
+    const timelineBottom = FOCUS_TIMELINE_TOP + timelineHeight;
+    return map(time, focusTimelineStart, focusTimelineEnd, FOCUS_TIMELINE_TOP, timelineBottom);
 }
 
-// Draw a horizontal line and a "MM-DD HH:MM" label every TICK_SECONDS from startTime to endTime.
-// timeToY converts a time to timeline y. Ticks above screen y = minScreenY are skipped.
-function drawTimeTicks(startTime, endTime, timeToY, minScreenY) {
+// Draw a horizontal line and a "MM-DD HH:MM" label every tickSeconds (default TICK_SECONDS) from
+// startTime to endTime. timeToY converts a time to timeline y. Ticks above screen y = minScreenY
+// are skipped.
+function drawTimeTicks(startTime, endTime, timeToY, minScreenY, tickSeconds = TICK_SECONDS) {
     textSize(10);
     textAlign(LEFT, CENTER);
-    const firstTick = Math.ceil(startTime / TICK_SECONDS) * TICK_SECONDS;
-    for (let time = firstTick; time <= endTime; time += TICK_SECONDS) {
+    const firstTick = Math.ceil(startTime / tickSeconds) * tickSeconds;
+    for (let time = firstTick; time <= endTime; time += tickSeconds) {
         const y = timeToY(time) - panY;
         if (y < minScreenY || y > height) continue;
 
@@ -205,8 +429,9 @@ function drawTimeTicks(startTime, endTime, timeToY, minScreenY) {
 }
 
 // Place every event dot on the time (x) by family (y) grid, and draw the family names.
-// alphaFor(dot) and isGreyFor(dot) decide how each dot looks.
-function showFamilyGrid(alphaFor, isGreyFor) {
+// alphaFor(dot) and isGreyFor(dot) decide how each dot looks. The name of the family at
+// highlightedIndex (if any) is drawn brighter.
+function showFamilyGrid(alphaFor, isGreyFor, highlightedIndex = -1) {
     for (const dot of eventDots) {
         dot.targetX = map(dot.data.t, firstEventTime, lastEventTime, MARGIN + 160, width - MARGIN);
         dot.targetY = familyRowY(dot.familyIndex);
@@ -216,12 +441,24 @@ function showFamilyGrid(alphaFor, isGreyFor) {
 
     // family names down the left side
     noStroke();
-    fill(200, 150);
     textSize(10);
     textAlign(LEFT, CENTER);
     for (let i = 0; i < familyNames.length; i++) {
+        fill(i === highlightedIndex ? 255 : 200, i === highlightedIndex ? 255 : 150);
         text(familyNames[i], MARGIN, familyRowY(i));
     }
+}
+
+// The family row under the mouse in the family grid, or -1. Only counts the mouse when it is
+// over the canvas itself (not over a text card) and inside the grid.
+function familyRowUnderMouse() {
+    const elementUnderMouse = document.elementFromPoint(mouseX, mouseY);
+    if (!elementUnderMouse || elementUnderMouse.tagName !== "CANVAS") return -1;
+    if (mouseX < MARGIN || mouseX > width - MARGIN) return -1;
+    const rowSpacing = (height - 2 * MARGIN) / (familyNames.length - 1);
+    const nearestRow = Math.round((mouseY - MARGIN) / rowSpacing);
+    if (nearestRow < 0 || nearestRow >= familyNames.length) return -1;
+    return nearestRow;
 }
 
 // scenes -------------------------------------------------------------------
@@ -242,136 +479,174 @@ const SCENE_PANS = {
 // One function per step, named after the step's data-step attribute in index.html.
 // Each receives `progress` (0 at the top of the step, 1 at the bottom) and sets targets for
 // the dots it shows; all other dots stay hidden. To add a scene, add a function here and a
-// matching <div class="step" data-step="name"> in index.html.
+// matching <div class="step" data-step="name"> in index.html. The hook steps (hook.js) and the
+// swarm step (swarm.js) have no scene here: those modules check scrollState themselves.
 
 const SCENES = {
     // Every revision to the wiki over time (see revisions.js).
     revisions: revisionsScene,
 
-    // All task events in grey, revealed in time order (left to right) as you scroll.
-    overview(progress) {
-        const revealUntil = lerp(firstEventTime, lastEventTime, constrain(progress * 1.5, 0, 1));
-        showFamilyGrid(
-            (dot) => (dot.data.t <= revealUntil ? 200 : 0),
-            (dot) => true
-        );
-    },
-
-    // All task events, coloured by event type.
+    // All task events, coloured by event type. Hovering a family's row highlights it; clicking it
+    // zooms in on that family (see mousePressed).
     byType(progress) {
+        const hoveredFamily = familyRowUnderMouse();
+        const isHovering = hoveredFamily !== -1;
         showFamilyGrid(
-            (dot) => 220,
-            (dot) => false
+            (dot) => (!isHovering || dot.familyIndex === hoveredFamily ? 220 : 60),
+            (dot) => false,
+            hoveredFamily
         );
+        if (isHovering) cursor(HAND);
     },
 
-    // Zoom into one family: x = page, y = time. Scrolling through the step pans down the timeline.
+    // Zoom into one family (focusFamily): x = page, y = time. Scrolling through the step pans
+    // down the timeline.
     family(progress) {
         for (const dot of eventDots) {
-            if (dot.data.family !== FOCUS_FAMILY) continue;
+            if (dot.data.family !== focusFamily) continue;
             dot.targetX = focusPageX(dot.pageIndex);
             dot.targetY = focusTimeY(dot.data.t);
             dot.targetAlpha = 255;
             dot.isGrey = false;
         }
 
-        // which page column the mouse is over (-1 for none)
-        let hoveredPage = -1;
-        if (mouseY >= PAGE_HEADER_HEIGHT) {
-            const columnSpacing = (width - MARGIN - PLOT_LEFT) / (focusPageNames.length - 1);
-            const nearestColumn = Math.round((mouseX - PLOT_LEFT) / columnSpacing);
-            if (nearestColumn >= 0 && nearestColumn < focusPageNames.length) {
-                hoveredPage = nearestColumn;
-            }
-        }
-
         // a faint vertical line per page, brighter under the mouse
+        const hoveredPage = focusPageUnderMouse();
         for (let i = 0; i < focusPageNames.length; i++) {
             stroke(255, i === hoveredPage ? 60 : 12);
             const x = focusPageX(i);
             line(x, PAGE_HEADER_HEIGHT, x, height);
         }
 
-        drawTimeTicks(focusTimelineStart, focusTimelineEnd, focusTimeY, PAGE_HEADER_HEIGHT);
+        drawTimeTicks(focusTimelineStart, focusTimelineEnd, focusTimeY, PAGE_HEADER_HEIGHT, focusTickSeconds);
 
-        // drawn on top of the dots: a solid header band with the page names, reading upward
+        // drawn on top of the dots: the labelled posts, then the page-name header they scroll under
         return () => {
-            noStroke();
-            fill(17);
-            rect(0, 0, width, PAGE_HEADER_HEIGHT);
-            stroke(60);
-            line(0, PAGE_HEADER_HEIGHT, width, PAGE_HEADER_HEIGHT);
-
-            noStroke();
-            textSize(9);
-            textAlign(LEFT, CENTER);
-            for (let i = 0; i < focusPageLabels.length; i++) {
-                push();
-                translate(focusPageX(i), PAGE_HEADER_HEIGHT - 8);
-                rotate(-HALF_PI);
-                fill(i === hoveredPage ? 255 : 140);
-                text(focusPageLabels[i], 0, 0);
-                pop();
-            }
+            drawFocusMoments();
+            drawFocusPageHeader(hoveredPage);
         };
-    },
-
-    // Highlight the few events where one agent contradicts another; everything else fades to grey.
-    contradict(progress) {
-        showFamilyGrid(
-            (dot) => (dot.type === "contradict" ? 255 : 20),
-            (dot) => dot.type !== "contradict"
-        );
     },
 };
 
+// The family scene's page column under the mouse: the nearest, if it's within half a column's
+// width (40px for a family with one page), or -1.
+function focusPageUnderMouse() {
+    if (mouseY < PAGE_HEADER_HEIGHT) return -1;
+    const pageCount = focusPageNames.length;
+    let nearest = -1;
+    let nearestDistance = pageCount > 1 ? (focusPageX(1) - focusPageX(0)) / 2 : 40;
+    for (let i = 0; i < pageCount; i++) {
+        const distance = Math.abs(mouseX - focusPageX(i));
+        if (distance <= nearestDistance) {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+    return nearest;
+}
+
+// A solid header band across the top of the family scene, with each page's name reading upward
+// above its column (the hovered one brighter).
+function drawFocusPageHeader(hoveredPage) {
+    noStroke();
+    fill(17);
+    rect(0, 0, width, PAGE_HEADER_HEIGHT);
+    stroke(60);
+    line(0, PAGE_HEADER_HEIGHT, width, PAGE_HEADER_HEIGHT);
+
+    noStroke();
+    textSize(9);
+    textAlign(LEFT, CENTER);
+    for (let i = 0; i < focusPageLabels.length; i++) {
+        push();
+        translate(focusPageX(i), PAGE_HEADER_HEIGHT - 8);
+        rotate(-HALF_PI);
+        fill(i === hoveredPage ? 255 : 140);
+        text(focusPageLabels[i], 0, 0);
+        pop();
+    }
+}
+
+// Label the focus family's key posts (focusMoments) as callouts on their dots, following the dots
+// as they move and fade. Each box is kept clear of the one above it, since posts can be minutes apart.
+function drawFocusMoments() {
+    let previousBottom = -Infinity;
+    for (const moment of focusMoments) {
+        const dot = moment.dot;
+        const alpha = dot.alpha / 255;
+        if (alpha < 0.01) continue;
+        const y = dot.y - panY;
+        const paragraphs = [
+            { text: formatUTC(dot.data.t) + " UTC", grey: 150 },
+            { text: moment.text, grey: 240 },
+        ];
+        const minTop = previousBottom + CALLOUT.stackGap;
+        previousBottom = drawCallout([{ x: dot.x, y }], y, paragraphs, alpha, minTop);
+    }
+}
+
 // draw ---------------------------------------------------------------------
 
-// p5: runs every frame. Updates the pan, runs the active scene, then draws the revision
-// dots, the event dots, the scene's overlay and the tooltip.
+// p5: runs every frame. Updates the pan, runs the active scene, then draws the hook dots, the
+// revision dots, the event dots, the scene's overlay and the tooltip.
 function draw() {
     background(17);
 
     const stepName = scrollState.stepName;
     const progress = activeStepProgress();
+    const stepChanged = updatePan(stepName, progress);
 
-    // Vertical pan. Within a step it eases toward its target, so scrolling feels smooth.
-    // When the step changes it jumps straight there instead: easing across a big pan change
-    // would drag every dot across the screen. Event dots are shifted by the same jump so they
-    // stay where they are on screen, then ease from there to their new places.
+    // defaults for this frame: nothing shown and an ordinary cursor; the scene overrides what it needs
+    cursor(ARROW);
+    for (const dot of eventDots) dot.targetAlpha = 0;
+
+    const scene = SCENES[stepName];
+    const drawOverlay = scene ? scene(progress) : null;
+    updateSwarm(); // shows or hides the swarm graph and advances its playback (swarm.js)
+
+    const hoveredHook = drawHookDots(); // hook.js
+    const hoveredRevision = drawRevisionDots(); // revisions.js
+    const hoveredEvent = drawEventDots(stepChanged);
+    if (drawOverlay) drawOverlay();
+    drawTooltip(hoveredEvent || hoveredRevision || hoveredHook);
+}
+
+// Vertical pan. Within a step it eases toward its target, so scrolling feels smooth. When the step
+// changes it jumps straight there instead: easing across a big pan change would drag every dot
+// across the screen. Event dots are shifted by the same jump so they stay where they are on
+// screen, then ease from there to their new places. Returns whether the step changed.
+function updatePan(stepName, progress) {
     const panFor = SCENE_PANS[stepName];
     const targetPanY = panFor ? panFor(progress) : 0;
     const stepChanged = stepName !== previousStepName;
-    if (stepChanged) {
-        const jump = targetPanY - panY;
-        for (const dot of eventDots) {
-            dot.y += jump;
-            // A dot that's off screen would fly in from the edge. Hide it instead, so it
-            // fades in at its new place (hidden dots start at their target; see below).
-            const screenY = dot.y - targetPanY;
-            if (screenY < 0 || screenY > height) dot.alpha = 0;
-        }
-        panY = targetPanY;
-        previousStepName = stepName;
-    } else {
+    if (!stepChanged) {
         panY = lerp(panY, targetPanY, PAN_EASING);
+        return false;
     }
 
-    // defaults for this frame: nothing shown; the scene overrides what it needs
-    revealLineY = -Infinity; // hides every revision block (see revisions.js)
-    for (const dot of eventDots) dot.targetAlpha = 0;
+    const jump = targetPanY - panY;
+    for (const dot of eventDots) {
+        dot.y += jump;
+        // A dot that's off screen would fly in from the edge. Hide it instead, so it fades in at
+        // its new place (hidden dots start at their target; see drawEventDots).
+        const screenY = dot.y - targetPanY;
+        if (screenY < 0 || screenY > height) dot.alpha = 0;
+    }
+    panY = targetPanY;
+    previousStepName = stepName;
+    stepChangedAt = millis();
+    return true;
+}
 
-    const scene = SCENES[stepName] || SCENES.overview;
-    const drawOverlay = scene(progress);
-
-    const hoveredRevision = drawRevisionDots();
-
-    // Event dots. These use the canvas API directly: p5's fill() creates a new colour object
-    // on every call, which made frames stutter with 2,000 dots. save() and restore() put the
-    // canvas settings back afterwards so p5's own drawing isn't affected.
+// Ease every event dot toward the target the scene gave it, and draw the visible ones. Returns the
+// dot under the mouse, or null.
+// These use the canvas API directly: p5's fill() creates a new colour object on every call, which
+// made frames stutter with 2,000 dots. save() and restore() put the canvas settings back afterwards
+// so p5's own drawing isn't affected.
+function drawEventDots(stepChanged) {
     const canvas = drawingContext;
     canvas.save();
-    let hoveredEvent = null;
+    let hovered = null;
     for (const dot of eventDots) {
         // skip dots that are hidden and meant to stay hidden
         if (dot.targetAlpha === 0 && dot.alpha < 1) continue;
@@ -398,81 +673,59 @@ function draw() {
             dot.y = lerp(dot.y, dot.targetY, EASING);
             dot.alpha = lerp(dot.alpha, dot.targetAlpha, EASING);
         }
-        const targetGrey = dot.isGrey ? 1 : 0;
-        dot.greyAmount = lerp(dot.greyAmount, targetGrey, EASING);
+        dot.greyAmount = lerp(dot.greyAmount, dot.isGrey ? 1 : 0, EASING);
         if (dot.alpha < 1) continue;
-
-        // colour: the event colour, grey, or a blend while switching between them
-        let fillColor;
-        if (dot.greyAmount < 0.01) {
-            fillColor = dot.color;
-        } else if (dot.greyAmount > 0.99) {
-            fillColor = GREY;
-        } else {
-            const [baseRed, baseGreen, baseBlue] = dot.colorRgb;
-            const mixedRed = lerp(baseRed, 160, dot.greyAmount);
-            const mixedGreen = lerp(baseGreen, 160, dot.greyAmount);
-            const mixedBlue = lerp(baseBlue, 160, dot.greyAmount);
-            fillColor = `rgb(${mixedRed}, ${mixedGreen}, ${mixedBlue})`;
-        }
 
         const screenY = dot.y - panY;
         canvas.globalAlpha = dot.alpha / 255;
-        canvas.fillStyle = fillColor;
+        canvas.fillStyle = eventDotColor(dot);
         canvas.beginPath();
         canvas.arc(dot.x, screenY, 2.5, 0, TWO_PI);
         canvas.fill();
 
         const mouseIsOver = dist(mouseX, mouseY, dot.x, screenY) < 4;
-        if (dot.alpha > 100 && mouseIsOver) hoveredEvent = dot;
+        if (dot.alpha > 100 && mouseIsOver) hovered = dot;
     }
     canvas.restore();
+    return hovered;
+}
 
-    if (drawOverlay) drawOverlay();
+// An event dot's colour: its event colour, grey, or a blend while it switches between them.
+function eventDotColor(dot) {
+    if (dot.greyAmount < 0.01) return dot.color;
+    if (dot.greyAmount > 0.99) return GREY;
+    const [red, green, blue] = dot.colorRgb.map((channel) => lerp(channel, 160, dot.greyAmount));
+    return `rgb(${red}, ${green}, ${blue})`;
+}
 
-    // tooltip for the dot under the mouse
-    const hovered = hoveredEvent || hoveredRevision;
-    if (hovered) {
-        const info = hovered.data;
-        let message = info.text || "";
-        if (message.length > TOOLTIP.maxChars) {
-            message = message.slice(0, TOOLTIP.maxChars) + "…";
-        }
-        const paragraphs = [`${info.label} · ${hovered.type}`, info.page, info.iso, ""];
-        for (const part of message.split("\n")) paragraphs.push(part);
+// Tooltip for the dot under the mouse (an event, revision or hook dot), if any: who, what, where,
+// when, and the start of the message, in a box beside the cursor.
+function drawTooltip(hovered) {
+    if (!hovered) return;
+    const info = hovered.data;
+    let message = info.text || "";
+    if (message.length > TOOLTIP.maxChars) {
+        message = message.slice(0, TOOLTIP.maxChars) + "…";
+    }
+    const paragraphs = [`${info.label} · ${hovered.type}`, info.page, info.iso, "", ...message.split("\n")];
 
-        // word-wrap each paragraph to fit inside the box
-        textSize(TOOLTIP.textSize);
-        const maxLineWidth = TOOLTIP.width - 2 * TOOLTIP.padding;
-        const lines = [];
-        for (const paragraph of paragraphs) {
-            let currentLine = "";
-            for (const word of paragraph.split(" ")) {
-                const longerLine = currentLine === "" ? word : currentLine + " " + word;
-                if (currentLine !== "" && textWidth(longerLine) > maxLineWidth) {
-                    lines.push(currentLine);
-                    currentLine = word;
-                } else {
-                    currentLine = longerLine;
-                }
-            }
-            lines.push(currentLine);
-        }
+    // word-wrap each paragraph to fit inside the box
+    textSize(TOOLTIP.textSize);
+    const lines = wrapParagraphs(paragraphs, TOOLTIP.width - 2 * TOOLTIP.padding);
 
-        // box beside the cursor, kept inside the canvas
-        const boxHeight = lines.length * TOOLTIP.lineHeight + 2 * TOOLTIP.padding;
-        const boxX = constrain(mouseX + TOOLTIP.offset, 0, width - TOOLTIP.width);
-        const boxY = constrain(mouseY + TOOLTIP.offset, 0, height - boxHeight);
-        fill(0, 220);
-        stroke(80);
-        rect(boxX, boxY, TOOLTIP.width, boxHeight);
+    // box beside the cursor, kept inside the canvas
+    const boxHeight = lines.length * TOOLTIP.lineHeight + 2 * TOOLTIP.padding;
+    const boxX = constrain(mouseX + TOOLTIP.offset, 0, width - TOOLTIP.width);
+    const boxY = constrain(mouseY + TOOLTIP.offset, 0, height - boxHeight);
+    fill(0, 220);
+    stroke(80);
+    rect(boxX, boxY, TOOLTIP.width, boxHeight);
 
-        noStroke();
-        fill(240);
-        textAlign(LEFT, TOP);
-        for (let i = 0; i < lines.length; i++) {
-            const lineY = boxY + TOOLTIP.padding + i * TOOLTIP.lineHeight;
-            text(lines[i], boxX + TOOLTIP.padding, lineY);
-        }
+    noStroke();
+    fill(240);
+    textAlign(LEFT, TOP);
+    for (let i = 0; i < lines.length; i++) {
+        const lineY = boxY + TOOLTIP.padding + i * TOOLTIP.lineHeight;
+        text(lines[i], boxX + TOOLTIP.padding, lineY);
     }
 }

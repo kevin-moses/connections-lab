@@ -10,15 +10,22 @@ scroller.setup({
     offset: TRIGGER_POSITION,
 });
 
-// When a step reaches the trigger line: highlight its card and tell the sketch.
-scroller.onStepEnter((response) => {
+// Make a step the active one: highlight its card and tell the sketch.
+function activateStep(stepElement, index) {
     for (const element of stepElements) {
         element.classList.remove("is-active");
     }
-    response.element.classList.add("is-active");
-    scrollState.stepName = response.element.dataset.step;
-    scrollState.stepIndex = response.index;
-});
+    stepElement.classList.add("is-active");
+    scrollState.stepName = stepElement.dataset.step;
+    scrollState.stepIndex = index;
+}
+
+// When a step reaches the trigger line, it becomes active.
+scroller.onStepEnter((response) => activateStep(response.element, response.index));
+
+// The first step starts exactly on the trigger line, so scrollama doesn't report entering it
+// until the reader scrolls; start on it.
+activateStep(stepElements[0], 0);
 
 // How far the reader has scrolled through the active step: 0 when its top is at the trigger
 // line, 1 when its bottom is. Called every frame by draw() in sketch.js. Measured from the page
@@ -29,6 +36,14 @@ function activeStepProgress() {
     const triggerY = window.innerHeight * TRIGGER_POSITION;
     const progress = (triggerY - box.top) / box.height;
     return Math.min(1, Math.max(0, progress));
+}
+
+// Smoothly scroll until the named step's top is just past the trigger line, making it active.
+function scrollToStep(stepName) {
+    const step = document.querySelector(`#scrolly .step[data-step="${stepName}"]`);
+    const triggerY = window.innerHeight * TRIGGER_POSITION;
+    const top = step.getBoundingClientRect().top + window.scrollY - triggerY + 1;
+    window.scrollTo({ top, behavior: "smooth" });
 }
 
 // Recalculate scrollama's trigger positions when the window changes size.

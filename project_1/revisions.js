@@ -2,9 +2,15 @@
 // x = page (sorted by name, no labels), y = time. The timeline pans as you scroll. Time is
 // split into 6-hour blocks (TICK_SECONDS); when a block crosses the reveal line its dots fade
 // in one by one in random order, and they fade out again if you scroll back up past it.
+// The story's big moments (data/revision_moments.json) pop up beside their time as the reveal line
+// reaches them. Each has an ISO time, the revisions to circle (`revs`, ids from
+// revision_timeline.json; the box sits beside the first), and its `text`. A moment without
+// revisions gets a line across the timeline instead. `source` is shown under the text, for claims
+// that come from outside these logs; those moments only have a date, so they sit at midnight.
 //
 // Loaded before sketch.js so SCENES can use revisionsScene. Uses these from sketch.js:
-// TICK_SECONDS, PLOT_LEFT, MARGIN, panY, formatUTC, setStepHeight, drawTimeTicks.
+// TICK_SECONDS, PLOT_LEFT, MARGIN, EASING, panY, formatUTC, setStepHeight, drawTimeTicks,
+// drawCallout, CALLOUT, parseUTC, DAY_SECONDS.
 
 const REVISIONS = {
     screensPerDay: 0.5, // timeline length per day, in screen heights (also sets the step's height)
@@ -12,6 +18,10 @@ const REVISIONS = {
     dotFadeMs: 150, // how long one dot takes to fade in or out
     dotSize: 3,
     revealLinePosition: 0.8, // reveal line (and current date/time), as a fraction of the canvas height
+    // the step's .timeline-card paragraphs are spread evenly over this stretch of the timeline,
+    // before the agents start coordinating on June 16
+    cardsFrom: "2026-05-26T00:00:00Z",
+    cardsUntil: "2026-06-15T12:00:00Z",
 };
 
 const REVISION_COLORS = {
@@ -24,14 +34,15 @@ const REVISION_COLORS = {
 };
 
 let revisionDots = [];
+let revisionMoments = []; // the moments, with their time, dots and pop-up opacity
 let timeBlocks = []; // one per 6 hours: { isShown, changedAt }
 let revisionPageCount = 0;
 let revisionsStart; // unix seconds, rounded down to a 6-hour boundary
 let revisionsEnd;
 let revisionTimelineScreens; // timeline length in screen heights
 
-// Timeline y of the reveal line. Set every frame by revisionsScene; -Infinity (the default
-// set in draw()) means no block is revealed.
+// Timeline y of the reveal line. Set every frame by revisionsScene; outside the revisions step it's
+// -Infinity (see drawRevisionDots), which means no block is revealed.
 let revealLineY = -Infinity;
 
 // Whether any revision dot was visible or still fading last frame.
@@ -41,9 +52,9 @@ let anyRevisionVisible = false;
 // after it, so the dots fade out where they are instead of jumping with the next step's pan.
 let revisionPanY = 0;
 
-// Build the revision dots and 6-hour blocks, and size the step to fit the timeline.
-// Called once from setup() in sketch.js.
-function setupRevisions(json) {
+// Build the revision dots, the 6-hour blocks and the moments, and size the step to fit the
+// timeline. Called once from setup() in sketch.js.
+function setupRevisions(json, momentsJson) {
     const revisions = json.revisions;
 
     // time range; the start is rounded down so blocks line up with the tick labels
@@ -57,9 +68,25 @@ function setupRevisions(json) {
     revisionsEnd = latest;
 
     // the step is exactly as tall as the timeline, so the timeline scrolls along with the page
-    const days = (revisionsEnd - revisionsStart) / (24 * 3600);
+    const days = (revisionsEnd - revisionsStart) / (DAY_SECONDS);
     revisionTimelineScreens = days * REVISIONS.screensPerDay;
     setStepHeight("revisions", revisionTimelineScreens);
+
+    // Place the text cards: a card with a data-time sits at that moment; the rest are spread evenly
+    // between cardsFrom and cardsUntil. The step is as tall as the timeline, so a card this far down
+    // the step reaches the middle of the screen when the reveal line reaches its time.
+    const cards = [...document.querySelectorAll('[data-step="revisions"] p.timeline-card')];
+    const spreadCards = cards.filter((card) => !card.dataset.time);
+    const cardsFrom = parseUTC(REVISIONS.cardsFrom);
+    const cardsUntil = parseUTC(REVISIONS.cardsUntil);
+    for (const card of cards) {
+        const spreadIndex = spreadCards.indexOf(card);
+        const time = card.dataset.time
+            ? parseUTC(card.dataset.time)
+            : lerp(cardsFrom, cardsUntil, spreadIndex / Math.max(1, spreadCards.length - 1));
+        // in vh, so it holds when the window resizes
+        card.style.top = `${(revisionTimeY(time) / height) * 100}vh`;
+    }
 
     // one column per page, sorted by name
     const pageSet = new Set();
@@ -83,6 +110,19 @@ function setupRevisions(json) {
         });
     }
 
+    // each moment's time and circled dots
+    const dotsByRev = new Map();
+    for (const dot of revisionDots) dotsByRev.set(dot.data.rev, dot);
+    revisionMoments = [];
+    for (const moment of momentsJson.moments) {
+        revisionMoments.push({
+            ...moment,
+            t: parseUTC(moment.iso),
+            dots: moment.revs.map((rev) => dotsByRev.get(rev)).filter((dot) => dot),
+            alpha: 0, // eased toward 1 once the reveal line reaches the moment
+        });
+    }
+
     const blockCount = Math.floor((revisionsEnd - revisionsStart) / TICK_SECONDS) + 1;
     timeBlocks = [];
     for (let i = 0; i < blockCount; i++) {
@@ -93,6 +133,11 @@ function setupRevisions(json) {
 // Timeline y of a moment (subtract panY to get screen y).
 function revisionTimeY(time) {
     return map(time, revisionsStart, revisionsEnd, 0, revisionTimelineScreens * height);
+}
+
+// Screen x of a page's column (pages sorted by name, left to right).
+function revisionPageX(pageIndex) {
+    return map(pageIndex, 0, revisionPageCount - 1, PLOT_LEFT, width - MARGIN);
 }
 
 // Pan for the "revisions" step (used by SCENE_PANS in sketch.js): progress 0 puts the start of
@@ -116,6 +161,8 @@ function revisionsScene(progress) {
     drawTimeTicks(revisionsStart, revisionsEnd, revisionTimeY, 0);
 
     return () => {
+        drawRevisionMoments();
+
         stroke(255, 70);
         line(PLOT_LEFT - 10, lineScreenY, width - MARGIN, lineScreenY);
 
@@ -136,6 +183,7 @@ function revisionsScene(progress) {
 // there can be ~14,000 dots.
 function drawRevisionDots() {
     const now = millis();
+    if (scrollState.stepName !== "revisions") revealLineY = -Infinity;
 
     // a block is shown once its start has scrolled above the reveal line
     for (let i = 0; i < timeBlocks.length; i++) {
@@ -188,4 +236,31 @@ function drawRevisionDots() {
     }
     canvas.restore();
     return hovered;
+}
+
+// Pop up each moment the reveal line has reached, and fade out the ones it hasn't (after scrolling
+// back up), as callouts (drawCallout in sketch.js). Called every frame by the revisions scene's
+// overlay, so moments vanish with the step.
+function drawRevisionMoments() {
+    let previousBottom = -Infinity; // each box keeps clear of the one above it
+    for (const moment of revisionMoments) {
+        const isReached = revisionTimeY(moment.t) < revealLineY;
+        moment.alpha = lerp(moment.alpha, isReached ? 1 : 0, EASING);
+        if (moment.alpha < 0.01) continue;
+
+        // date, text, and where the claim comes from
+        const date = moment.source ? formatUTC(moment.t).slice(0, 10) : formatUTC(moment.t) + " UTC";
+        const paragraphs = [
+            { text: date, grey: 150 },
+            { text: moment.text, grey: 240 },
+        ];
+        if (moment.source) paragraphs.push({ text: "Source: " + moment.source, grey: 150 });
+
+        const rings = moment.dots.map((dot) => ({
+            x: revisionPageX(dot.pageIndex),
+            y: revisionTimeY(dot.data.t) - panY,
+        }));
+        const y = revisionTimeY(moment.t) - panY;
+        previousBottom = drawCallout(rings, y, paragraphs, moment.alpha, previousBottom + CALLOUT.stackGap);
+    }
 }
