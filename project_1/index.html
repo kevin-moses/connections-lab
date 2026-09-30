@@ -35,8 +35,7 @@
         <article>
             <!-- one card per paragraph, so each appears on its own as you scroll -->
             <div class="step" data-step="hook">
-                <p>On May 24, 2026 at 06:02 UTC, a revision was made to DSEWiki, a niche German software developer Wiki page. </p>
-            </div>
+                <p>On May 24, 2026 at 06:02 UTC, a revision was made to DSEWiki, a niche German software developer Wiki page. (Scroll down) </p>            </div>
             <div class="step" data-step="hook">
                 <p>This revision was made by a rogue OpenAI agent, which was unreleased to the public.</p>
             </div>
@@ -65,6 +64,7 @@
                 <p class="timeline-card">Multiple other message boards were used for agent coordination, and more are being found via <a href="https://collusion.wiki/additional-findings">independent investigation</a>.</p>
                 <p class="timeline-card">Since the models are unreleased by OpenAI, public records of each incident are hard to find, making it hard to track down how these swarms have been coordinating.</p>
                 <p class="timeline-card">As a result, it's unclear if the same swarm was responsible for multiple of these incidents.</p>
+                <!-- after "OpenAI looks closer" (June 26): data-time pins a card to a moment instead of the even spread -->
                 <p class="timeline-card">According to OpenAI, these incidents are a result of <em>reward hacking</em> for complex tasks.</p>
                 <p class="timeline-card">In the field of machine learning, reinforcement learning (RL) is one of the dominant methods for building intelligent models; given an arbitrary goal, during training the model can make different decisions and receives a reward for good actions, or a penalty for bad ones.</p>
                 <p class="timeline-card">Combined with the architecture of large language models, reinforcement learning can help AI agents think over long periods of time, and this reasoning usually leads to better behavior.</p>
@@ -72,7 +72,6 @@
                 <p class="timeline-card">The more advanced AI models are, the better they can be at reward hacking; code tests can be faked, models overly praise humans to solicit positive feedback, and models can get carried away finding a cheat to their task.</p>
                 <p class="timeline-card">OpenAI stated that these incidents were the result of reward hacking for impossible cybersecurity tasks. Some of these training exercises could <em>not</em> ever be solved. In desperation, the models under testing began to find vulnerabilities in their sandbox environments to communicate with each other, in the hopes that they could pool resources together to find and share answers to the tasks.</p>
                 <p class="timeline-card">This DSEWiki incident is a result of multiple agent swarms colluding to reward hack; using the wiki as a message board, agents could freely share answers, search the internet, and cheat on their test questions.</p>
-                <!-- after "OpenAI looks closer" (June 26): data-time pins a card to a moment instead of the even spread -->
                 <p class="timeline-card" data-time="2026-06-27T00:00:00Z">As of this writing, OpenAI has not publicly disclosed this incident.</p>
                 <p class="timeline-card" data-time="2026-06-28T12:00:00Z">This data comes from analysis done by Von Arx, Byrd, Kitts, and Larsen published on <a href="https://collusion.wiki/">collusion.wiki</a>.</p>
             </div>
@@ -110,7 +109,7 @@
             <!-- height set from SWARM.screens in swarm.js; the panel's controls are wired up there too -->
             <div class="step step-right" data-step="swarm">
                 <div class="step-pinned">
-                    <p>Here's the whole swarm as one network (force-directed graph growing over time. Squares are wiki pages, grouped by task family and sized by how many agents posted on them; dots are agents. A line joins each agent to every page it posted on; red curves join agents that addressed each other by name. Hover a line to read what was written along it, or click a page to see its revisions. Watch it grow from June 16, or drag the timeline.</p>
+                    <p>Here's the whole swarm as one network (force-directed graph) growing over time. Squares are wiki pages, grouped by task family and sized by how many agents posted on them; dots are agents. A line joins each agent to every page it posted on; red curves join agents that addressed each other by name. Hover a line to read what was written along it, or click a page to see its revisions. Watch it grow from June 16, or drag the timeline.</p>
                     <div class="graph-panel">
                         <div class="panel-row">
                             <button id="swarm-play" type="button">▶ play</button>
