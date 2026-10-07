@@ -1,5 +1,6 @@
 // The "revisions" step: every revision to the wiki (data/revision_timeline.json) on one timeline.
-// x = page (sorted by name, no labels), y = time. The timeline pans as you scroll. Time is
+// x = page (sorted by name, no labels), y = time. A revision that was a task action (post, confirm, …)
+// is coloured as on the task families chart; the rest are grey (see revisionColor). The timeline pans as you scroll. Time is
 // split into 6-hour blocks (TICK_SECONDS); when a block crosses the reveal line its dots fade
 // in one by one in random order, and they fade out again if you scroll back up past it.
 // The story's big moments (data/revision_moments.json) pop up beside their time as the reveal line
@@ -9,7 +10,7 @@
 // that come from outside these logs; those moments only have a date, so they sit at midnight.
 //
 // Loaded before sketch.js so SCENES can use revisionsScene. Uses these from sketch.js:
-// TICK_SECONDS, PLOT_LEFT, MARGIN, EASING, panY, formatUTC, setStepHeight, drawTimeTicks,
+// TICK_SECONDS, PLOT_LEFT, MARGIN, EASING, EVENT_COLORS, panY, formatUTC, setStepHeight, drawTimeTicks,
 // drawCallout, CALLOUT, parseUTC, DAY_SECONDS.
 
 const REVISIONS = {
@@ -24,14 +25,19 @@ const REVISIONS = {
     cardsUntil: "2026-06-15T12:00:00Z",
 };
 
-const REVISION_COLORS = {
-    creation: "#5fb49c",
-    edit: "#6c8ebf",
-    append: "#f2c14e",
-    prune: "#ff3b3b",
-    noop: "#666666",
-    history_truncated: "#c3a1ff",
-};
+// revisions that weren't a task action (see tagRevisionActions in sketch.js); darker than "ack"
+const NON_ACTION_COLOR = "#707070";
+
+// A revision's colour on the scale and timeline charts: its task action's colour, the same as on the
+// task families chart (EVENT_COLORS in sketch.js), or grey if it wasn't one.
+function revisionColor(revision) {
+    return EVENT_COLORS[revision.action] || NON_ACTION_COLOR;
+}
+
+// What a revision was, for its tooltip: its task action if it was one, else its kind of edit.
+function revisionType(revision) {
+    return revision.action || revision.kind;
+}
 
 let revisionDots = [];
 let revisionMoments = []; // the moments, with their time, dots and pop-up opacity
@@ -100,12 +106,12 @@ function setupRevisions(json, momentsJson) {
     for (const revision of revisions) {
         revisionDots.push({
             data: revision, // the original record (shown in the tooltip)
-            type: revision.kind,
+            type: revisionType(revision),
             pageIndex: pageIndexByName.get(revision.page),
             blockIndex: Math.floor((revision.t - revisionsStart) / TICK_SECONDS),
             // random wait before fading in, so a block's dots appear in random order
             fadeDelay: random(REVISIONS.blockRevealMs - REVISIONS.dotFadeMs),
-            color: REVISION_COLORS[revision.kind] || "#ffffff",
+            color: revisionColor(revision),
             alpha: 0, // 0 = hidden, 1 = fully visible
         });
     }

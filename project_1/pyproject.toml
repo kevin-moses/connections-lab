@@ -1,0 +1,11 @@
+[project]
+name = "connections-lab-project-1"
+version = "0.1.0"
+description = "Regenerates the JSON files in data/ from the full-wiki-logs corpus (see scripts/README.md)"
+requires-python = ">=3.14"
+# Pinned to the versions the analysis repository was run with, so that the
+# exports come out byte-identical.
+dependencies = [
+    "numpy==2.5.3",
+    "pandas==3.0.5",
+]

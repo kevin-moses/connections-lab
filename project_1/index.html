@@ -10,6 +10,17 @@
     <script src="https://cdn.jsdelivr.net/npm/force-graph@1.52.0/dist/force-graph.min.js"></script>
 </head>
 <body>
+    <!-- hidden until the reader reaches the swarm step, or reloads the page (see nav.js) -->
+    <nav id="site-nav" aria-label="Sections">
+        <a href="#" data-step="hook">intro</a>
+        <a href="#" data-step="hookScatter">scale</a>
+        <a href="#" data-step="revisions">timeline</a>
+        <a href="#" data-step="byType">task families</a>
+        <a href="#" data-step="family">one family</a>
+        <a href="#" data-step="swarm">swarm</a>
+        <a href="#references">references</a>
+    </nav>
+
     <!-- <header class="intro">
         <h1>Understanding Rogue Agent Collusion</h1>
         <p>The following visualizations are a follow up to research done by Von Arx, et. al (<a href="https://collusion.wiki/">collusion.wiki</a>) 
@@ -53,7 +64,7 @@
                  evenly down the timeline by revisions.js, so each reaches the middle of the screen on its own -->
             <div class="step" data-step="revisions">
                 <p>Here's the same timeline, now shown vertically.</p>
-                <p>Scrolling down through this timespan will visualize the agents' edits, marked as a colored dot corresponding to the type of action taken (posting, editing, appending, etc.) </p>
+                <p>Scrolling down through this timespan will visualize the agents' edits, one dot each. Grey dots are ordinary edits; colored dots are agents messaging each other about their tasks, colored by what they were doing (asking, answering, confirming, posting, etc.), with the same colors as the charts that follow.</p>
                 <p class="timeline-card">The first few successful posts to the wiki show agents probing their edit capabilities, and uploading links related to federal USA spending.</p>
                 <p class="timeline-card">AI agents, which can autonomously plan, act, and use tools like the internet, are increasingly capable at reasoning and solving complex human tasks.</p>
                 <p class="timeline-card">Swarming, or having distributed groups of agents coordinating together, is a new and evolving paradigm for tackling hard problems; an unreleased swarm of 10,000+ agents recently presented a solution for the <a href="https://openai.com/index/navier-stokes-solution/">Navier-Stokes Millennium Prize Problem</a>, solving a long-standing open question in fluid mechanics.</p>
@@ -119,19 +130,25 @@
                         <canvas id="swarm-hourly" aria-hidden="true"></canvas>
                         <input id="swarm-scrubber" type="range" aria-label="Wiki time">
                         <div class="panel-row muted"><span id="swarm-counts"></span></div>
-                        <div class="panel-row muted">drag to pan · ctrl/⌘ + scroll to zoom · hover a line to read it</div>
+                        <!-- one hint for a mouse, one for a touch screen (see style.css) -->
+                        <div class="panel-row muted hint-pointer">drag to pan · ctrl/⌘ + scroll to zoom · hover a line to read it</div>
+                        <div class="panel-row muted hint-touch">two fingers to pan and zoom · tap a page or agent</div>
 
                         <div id="swarm-inspect" class="panel-section"></div>
 
-                        <div class="panel-section legend muted">
-                            <span><i class="key-page"></i>page (<span id="swarm-legend-families">5</span> biggest families coloured)</span>
-                            <span><i class="key-agent"></i>agent</span>
-                            <span><i class="key-ring"></i>agent on several families</span>
-                            <span><i class="key-edge"></i>agent posted on page (bright: last <span id="swarm-legend-recent">30</span> min)</span>
-                            <span><i class="key-link"></i>page links to page</span>
-                            <span><i class="key-address"></i>agent addresses agent</span>
-                            <span>hollow: mentioned, no posts yet</span>
-                        </div>
+                        <!-- open, except on a narrow screen (see setupSwarmPanel) -->
+                        <details class="panel-section legend muted" open>
+                            <summary>legend</summary>
+                            <div class="legend-keys">
+                                <span><i class="key-page"></i>page (<span id="swarm-legend-families">5</span> biggest families coloured)</span>
+                                <span><i class="key-agent"></i>agent</span>
+                                <span><i class="key-ring"></i>agent on several families</span>
+                                <span><i class="key-edge"></i>agent posted on page (bright: last <span id="swarm-legend-recent">30</span> min)</span>
+                                <span><i class="key-link"></i>page links to page</span>
+                                <span><i class="key-address"></i>agent addresses agent</span>
+                                <span>hollow: mentioned, no posts yet</span>
+                            </div>
+                        </details>
                     </div>
                 </div>
             </div>
@@ -139,12 +156,22 @@
     </section>
 
     <footer class="outro">
+        <section id="references" class="references" aria-labelledby="references-heading">
+            <h2 id="references-heading">References</h2>
+            <ol>
+                <li>Sydney Von Arx, Cormac Slade Byrd, Spencer Kitts and Thomas Larsen. collusion.wiki. The source of the data shown here. <a href="https://collusion.wiki/">https://collusion.wiki/</a></li>
+                <li>Hacker News discussion. <a href="https://news.ycombinator.com/item?id=49563657">https://news.ycombinator.com/item?id=49563657</a></li>
+                <li>The Hacker News, September 2026. <a href="https://thehackernews.com/2026/09/thousands-of-openai-agents-quietly.html">https://thehackernews.com/2026/09/thousands-of-openai-agents-quietly.html</a></li>
+                <li>Reuters, September 4, 2026. <a href="https://www.reuters.com/world/europe/openai-agents-hijacked-german-website-previously-undisclosed-ai-breakout-this-2026-09-04/">https://www.reuters.com/world/europe/openai-agents-hijacked-german-website-previously-undisclosed-ai-breakout-this-2026-09-04/</a></li>
+            </ol>
+        </section>
     </footer>
 
     <script src="revisions.js"></script>
     <script src="hook.js"></script>
     <script src="swarm.js"></script>
     <script src="sketch.js"></script>
+    <script src="nav.js"></script>
     <script src="scroll.js"></script>
 </body>
 </html>

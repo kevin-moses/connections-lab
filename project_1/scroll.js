@@ -1,5 +1,6 @@
 // Scrollama setup: keeps `scrollState` (in sketch.js) pointing at the step that has reached
-// the middle of the screen, and highlights that step's text card.
+// the middle of the screen, highlights that step's text card and its link in the nav bar, and
+// shows the nav bar once the swarm step is reached (nav.js).
 
 const TRIGGER_POSITION = 0.5; // a step becomes active when its top reaches the middle of the screen
 const stepElements = document.querySelectorAll("#scrolly .step");
@@ -18,6 +19,8 @@ function activateStep(stepElement, index) {
     stepElement.classList.add("is-active");
     scrollState.stepName = stepElement.dataset.step;
     scrollState.stepIndex = index;
+    highlightNav(scrollState.stepName);
+    if (scrollState.stepName === "swarm") showNav();
 }
 
 // When a step reaches the trigger line, it becomes active.
@@ -38,12 +41,13 @@ function activeStepProgress() {
     return Math.min(1, Math.max(0, progress));
 }
 
-// Smoothly scroll until the named step's top is just past the trigger line, making it active.
-function scrollToStep(stepName) {
+// Scroll (smoothly, unless behavior says otherwise) until the named step's first card's top is just
+// past the trigger line, making it active.
+function scrollToStep(stepName, behavior = "smooth") {
     const step = document.querySelector(`#scrolly .step[data-step="${stepName}"]`);
     const triggerY = window.innerHeight * TRIGGER_POSITION;
     const top = step.getBoundingClientRect().top + window.scrollY - triggerY + 1;
-    window.scrollTo({ top, behavior: "smooth" });
+    window.scrollTo({ top, behavior });
 }
 
 // Recalculate scrollama's trigger positions when the window changes size.

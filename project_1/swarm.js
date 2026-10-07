@@ -11,13 +11,14 @@
 // its revisions and neighbours; click one of those to move to it.
 //
 // Shown whenever the "swarm" step is active (scrollState), with no scene in sketch.js. Uses these
-// from sketch.js: formatUTC, setStepHeight, and p5's deltaTime.
+// from sketch.js: formatUTC, setStepHeight, and p5's deltaTime, width and height.
 
 const SWARM = {
     screens: 3, // step height in screen heights
     speeds: [1, 3, 12], // playback speed in wiki hours per second; the first is the default
     recentSeconds: 30 * 60, // an agent–page line stays bright this long after a post on it
     fitMargin: 40, // px kept around the graph when it's fitted to the screen
+    fitMarginNarrow: 10, // the same, on a narrow screen (see isSwarmPanelAtBottom)
     // pages of the five biggest families (by agents), in order; every other family is grey
     // (red is kept for agent → agent curves)
     familyColors: ["#6c8ebf", "#f2c14e", "#f78154", "#c3a1ff", "#5fb49c"],
@@ -186,8 +187,8 @@ const LINK_DASH = [2, 2]; // page → page curves (one array, not a new one per 
 // highlighted and hovered by the functions below.
 function createSwarmGraph(container) {
     return new ForceGraph(container)
-        .width(window.innerWidth)
-        .height(window.innerHeight)
+        .width(width) // the p5 canvas's size, below the nav bar
+        .height(height)
         .graphData({ nodes: swarmNodes, links: swarmLinks })
         .nodeId("id")
         // no simulation: every node stays where the data puts it
@@ -199,6 +200,9 @@ function createSwarmGraph(container) {
         .enableNodeDrag(false)
         // plain scrolling keeps scrolling the page; ctrl/cmd + scroll (and trackpad pinch) zooms
         .enableZoomInteraction((event) => event.ctrlKey || event.metaKey)
+        // on a touch screen one finger scrolls the page (see #swarm-graph canvas in style.css), and
+        // two pan and pinch-zoom the graph; a mouse drags as usual
+        .enablePanInteraction((event) => !event.touches || event.touches.length > 1)
         // what's shown so far
         .nodeVisibility((node) => node.t <= swarmNow)
         .linkVisibility(isSwarmLinkVisible)
@@ -393,6 +397,7 @@ function nodeFocus(node) {
 function selectSwarmNode(node) {
     swarmSelected = node;
     swarmInspectKey = null; // redraw the inspect panel
+    updateSwarmPanel(); // now, so the graph area accounts for the panel's new height
     if (node) centreSwarmOn(node.x, node.y);
 }
 
@@ -560,34 +565,53 @@ function swarmLinkTooltip(link) {
 
 // camera ---------------------------------------------------------------------
 
-// The part of the screen the graph should fill: left of the panel (see spaceLeftOfPinnedCards).
+// Whether the panel is pinned along the bottom of the screen, under the graph (narrow screens, where
+// its card spans the screen; see style.css), rather than on the right, beside it.
+function isSwarmPanelAtBottom() {
+    return spaceLeftOfPinnedCards("swarm") === window.innerWidth;
+}
+
+// The part of the screen the graph should fill ({ width, height }, from the top left): above the
+// panel on a narrow screen, else left of it (see spaceLeftOfPinnedCards).
 function swarmGraphArea() {
-    return { width: spaceLeftOfPinnedCards("swarm"), height: window.innerHeight };
+    if (isSwarmPanelAtBottom()) {
+        return { width: swarmGraph.width(), height: swarmGraph.height() - swarmUI.panel.offsetHeight };
+    }
+    return { width: spaceLeftOfPinnedCards("swarm"), height: swarmGraph.height() };
+}
+
+// How far (in graph units, at `zoom`) the middle of the graph area is from the middle of the
+// screen, which is where centerAt puts its point.
+function swarmAreaOffset(area, zoom) {
+    return {
+        x: (swarmGraph.width() - area.width) / (2 * zoom),
+        y: (swarmGraph.height() - area.height) / (2 * zoom),
+    };
 }
 
 // Zoom and pan so the whole canvas (meta.canvas) fits the graph area.
 function fitSwarmGraph() {
     const area = swarmGraphArea();
     const canvas = swarmMeta.canvas;
-    const zoomToFitWidth = (area.width - 2 * SWARM.fitMargin) / canvas.width;
-    const zoomToFitHeight = (area.height - 2 * SWARM.fitMargin) / canvas.height;
+    const margin = isSwarmPanelAtBottom() ? SWARM.fitMarginNarrow : SWARM.fitMargin;
+    const zoomToFitWidth = (area.width - 2 * margin) / canvas.width;
+    const zoomToFitHeight = (area.height - 2 * margin) / canvas.height;
     const zoom = Math.min(zoomToFitWidth, zoomToFitHeight);
     // the canvas centre should land in the middle of the graph area, not of the whole screen
-    const centreX = canvas.width / 2 + (window.innerWidth - area.width) / (2 * zoom);
+    const offset = swarmAreaOffset(area, zoom);
     swarmGraph.zoom(zoom);
-    swarmGraph.centerAt(centreX, canvas.height / 2);
+    swarmGraph.centerAt(canvas.width / 2 + offset.x, canvas.height / 2 + offset.y);
 }
 
 // Pan so graph point (x, y) sits in the middle of the graph area.
 function centreSwarmOn(x, y) {
-    const area = swarmGraphArea();
-    const offset = (window.innerWidth - area.width) / (2 * swarmGraph.zoom());
-    swarmGraph.centerAt(x + offset, y, 600);
+    const offset = swarmAreaOffset(swarmGraphArea(), swarmGraph.zoom());
+    swarmGraph.centerAt(x + offset.x, y + offset.y, 600);
 }
 
-// Keep the graph the size of the window. Called from windowResized() in sketch.js.
+// Keep the graph the size of the p5 canvas. Called from fitCanvas() in sketch.js.
 function resizeSwarm() {
-    swarmGraph.width(window.innerWidth).height(window.innerHeight);
+    swarmGraph.width(width).height(height);
     measureSwarmHourly();
     swarmPanelNow = null; // redraw the chart at its new size
     if (isSwarmShown) fitSwarmGraph();
@@ -598,6 +622,7 @@ function resizeSwarm() {
 function setupSwarmPanel() {
     swarmUI = {
         graph: document.getElementById("swarm-graph"),
+        panel: document.querySelector(".graph-panel"),
         play: document.getElementById("swarm-play"),
         time: document.getElementById("swarm-time"),
         scrubber: document.getElementById("swarm-scrubber"),
@@ -640,6 +665,8 @@ function setupSwarmPanel() {
     legend.style.setProperty("--key-address", SWARM.lineColors.addressFocused);
     document.getElementById("swarm-legend-families").textContent = SWARM.familyColors.length;
     document.getElementById("swarm-legend-recent").textContent = SWARM.recentSeconds / 60;
+    // folded away where the panel sits under the graph, to leave the graph more room
+    if (isSwarmPanelAtBottom()) legend.open = false;
 
     setSwarmPlaying(false);
 }

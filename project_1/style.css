@@ -2,6 +2,15 @@
     box-sizing: border-box;
 }
 
+/* the nav bar's height: 0 until it's shown (see nav.js); the pinned canvas and cards sit below it */
+:root {
+    --nav-height: 0px;
+}
+
+body.has-nav {
+    --nav-height: 36px;
+}
+
 body {
     margin: 0;
     background: #111;
@@ -23,6 +32,80 @@ a:visited {
     padding: 0 10vw;
 }
 
+/* the sources, at the end */
+.references {
+    max-width: 720px;
+    padding: 4rem 0;
+    font-size: 13px;
+    line-height: 1.6;
+    scroll-margin-top: var(--nav-height); /* its nav link brings it in below the bar */
+}
+
+.references h2 {
+    margin: 0 0 1rem;
+    font-size: 16px;
+}
+
+.references ol {
+    margin: 0;
+    padding-left: 1.5em;
+}
+
+.references li {
+    margin-bottom: 0.75rem;
+}
+
+/* long URLs wrap instead of widening the page on a phone */
+.references a {
+    overflow-wrap: anywhere;
+}
+
+/* the nav bar: a link per section, the current one highlighted; scrolls sideways if it doesn't fit */
+#site-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: none;
+    gap: 4px;
+    align-items: center;
+    height: var(--nav-height);
+    padding: 0 5vw;
+    overflow-x: auto;
+    border-bottom: 1px solid #333;
+    background: #111;
+    font-size: 12px;
+    white-space: nowrap;
+    scrollbar-width: none;
+}
+
+body.has-nav #site-nav {
+    display: flex;
+    animation: nav-fade-in 0.5s;
+}
+
+@keyframes nav-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+#site-nav a {
+    padding: 4px 8px;
+    color: #999;
+    text-decoration: none;
+}
+
+#site-nav a:hover {
+    color: #fff;
+}
+
+#site-nav a[aria-current] {
+    border-bottom: 1px solid #fff;
+    color: #fff;
+}
+
 /* scrolly layout: sticky canvas behind, steps scroll over it */
 #scrolly {
     position: relative;
@@ -30,8 +113,8 @@ a:visited {
 
 #sticky {
     position: sticky;
-    top: 0;
-    height: 100vh;
+    top: var(--nav-height);
+    height: calc(100vh - var(--nav-height));
     width: 100%;
     margin: 0;
 }
@@ -42,7 +125,7 @@ a:visited {
 
 #scrolly article {
     position: relative;
-    margin-top: -100vh; /* pull steps up over the sticky canvas */
+    margin-top: calc(var(--nav-height) - 100vh); /* pull steps up over the sticky canvas */
     padding: 0 5vw;
     pointer-events: none; /* let the mouse reach the canvas */
 }
@@ -62,14 +145,15 @@ a:visited {
     margin-left: auto;
 }
 
-/* cards that stay put near the top of the screen while their (tall) step scrolls past, 20px down
+/* cards that stay put near the top of the canvas while their (tall) step scrolls past, 20px down
    unless a step sets --pinned-top (the family step's sit below the canvas's page-name header; see
    setupFamilyStep in sketch.js), and never running off the bottom */
 .step-pinned {
     --pinned-top: 20px;
     position: sticky;
-    top: var(--pinned-top);
-    max-height: calc(100vh - var(--pinned-top) - 20px);
+    top: calc(var(--nav-height) + var(--pinned-top));
+    max-height: calc(100vh - var(--nav-height) - var(--pinned-top) - 20px);
+    max-height: calc(100svh - var(--nav-height) - var(--pinned-top) - 20px); /* the visible height, with a phone's toolbars */
     overflow-y: auto;
 }
 
@@ -89,9 +173,16 @@ a:visited {
     pointer-events: auto;
 }
 
+/* force-graph's node dragging (turned off) sets touch-action: none on its canvas, which stops a
+   finger on the graph from scrolling the page. Let one finger scroll; two pan and zoom the graph
+   (see createSwarmGraph in swarm.js). */
+#swarm-graph canvas {
+    touch-action: pan-y !important;
+}
+
 /* its hover tooltip, styled like the sketch's (TOOLTIP in sketch.js) */
 #swarm-graph .float-tooltip-kap {
-    max-width: 360px;
+    max-width: min(360px, calc(100vw - 32px));
     padding: 10px;
     border: 1px solid #505050;
     border-radius: 0;
@@ -198,12 +289,35 @@ a:visited {
     font-size: 11px;
 }
 
-/* the legend: one key per line */
+/* a hint for a mouse, or for a touch screen */
+.graph-panel .hint-touch {
+    display: none;
+}
+
+@media (hover: none) {
+    .graph-panel .hint-pointer {
+        display: none;
+    }
+
+    .graph-panel .hint-touch {
+        display: flex;
+    }
+}
+
+/* the legend: one key per line, under a heading that folds it away */
 .graph-panel .legend {
+    font-size: 11px;
+}
+
+.graph-panel .legend summary {
+    cursor: pointer;
+}
+
+.graph-panel .legend-keys {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    font-size: 11px;
+    margin-top: 6px;
 }
 
 /* legend keys, drawn to match the graph: a 14px-wide slot holding a line or a shape. The colours
@@ -272,4 +386,78 @@ a:visited {
 
 .step.is-active {
     opacity: 1;
+}
+
+/* bigger controls for fingers; 16px stops iOS zooming the page when the speed menu is tapped */
+@media (pointer: coarse) {
+    .graph-panel button,
+    .graph-panel select {
+        padding: 5px 10px;
+    }
+
+    .graph-panel select {
+        font-size: 16px;
+    }
+}
+
+/* Narrow screens, where a 360px card can't fit in the right half (see spaceLeftOfPinnedCards in
+   sketch.js), so pinned cards would cover the graph. The swarm step's intro card scrolls past as
+   usual, and its panel is pinned along the bottom of the screen, full width, with the graph fitted
+   in the space above it (see swarmGraphArea in swarm.js). */
+@media (max-width: 800px) {
+    .step[data-step="swarm"] {
+        display: flex;
+        flex-direction: column;
+        max-width: none;
+    }
+
+    /* the intro card and the panel become the step's own flex items */
+    .step[data-step="swarm"] .step-pinned {
+        display: contents;
+    }
+
+    .step[data-step="swarm"] p {
+        max-width: 360px;
+        margin-left: auto;
+    }
+
+    /* pinned to the bottom from its place at the end of the step, so it stays there all the way
+       through; it scrolls inside itself if it grows past half the screen */
+    .step[data-step="swarm"] .graph-panel {
+        position: sticky;
+        bottom: 0;
+        max-height: 50vh;
+        max-height: 50svh;
+        margin: auto -5vw 0;
+        padding: 0.5rem 5vw 0.75rem;
+        overflow-y: auto;
+        border-width: 1px 0 0;
+        background: rgba(17, 17, 17, 0.97);
+    }
+
+    /* only while the step is active, not as it scrolls in over the step before */
+    .step[data-step="swarm"]:not(.is-active) .graph-panel {
+        visibility: hidden;
+    }
+
+    .graph-panel .panel-section {
+        margin-top: 8px;
+        padding-top: 6px;
+    }
+
+    .graph-panel canvas {
+        height: 28px;
+    }
+
+    /* the selected node's revisions and neighbours scroll as one list, so the panel stays short */
+    #swarm-inspect {
+        max-height: 25vh;
+        overflow-y: auto;
+    }
+
+    .graph-panel .revisions,
+    .graph-panel .neighbours {
+        max-height: none;
+        overflow: visible;
+    }
 }

@@ -111,17 +111,33 @@ function preload() {
     swarmData = loadJSON("data/swarm_graph.json");
 }
 
-// p5: create the canvas and set up every scene's data.
+// Whether setup() has run (nav.js waits for it before resizing the canvas).
+let isSketchSetUp = false;
+
+// p5: create the canvas, below the nav bar if it's showing (nav.js), and set up every scene's data.
 function setup() {
-    const canvas = createCanvas(windowWidth, windowHeight);
+    const canvas = createCanvas(windowWidth, windowHeight - navHeight());
+    canvasWindowSize = { width: windowWidth, height: windowHeight };
     canvas.parent("sticky");
     textFont("monospace");
 
+    tagRevisionActions(revisionData.revisions, taskData.events); // before the charts coloured by it
     setupRevisions(revisionData, revisionMomentsData); // revisions.js
     setupHook(revisionData); // hook.js
     setupSwarm(swarmData); // swarm.js
     setupEventDots(taskData);
     setupFamilyStep();
+    isSketchSetUp = true;
+}
+
+// Give each wiki revision the task action it was (its event type in task_timelines.json: post,
+// confirm, …), or null if it wasn't one, so the scale and timeline charts can colour actions as the
+// task families chart does (see revisionColor in revisions.js). Every event is exactly one revision,
+// matched by time, agent and page.
+function tagRevisionActions(revisions, events) {
+    const key = (record) => `${record.t}|${record.label}|${record.page}`;
+    const actionByKey = new Map(events.map((event) => [key(event), event.event]));
+    for (const revision of revisions) revision.action = actionByKey.get(key(revision)) ?? null;
 }
 
 // One dot per task event, plus the family rows and the time range they're laid out on.
@@ -220,13 +236,30 @@ function setFocusFamily(familyName) {
 
 // Make a step `screens` screen-heights tall, so scrolling through it takes that long.
 function setStepHeight(stepName, screens) {
-    const step = document.querySelector(`[data-step="${stepName}"]`);
+    const step = document.querySelector(`#scrolly .step[data-step="${stepName}"]`);
     step.style.height = `${screens * 100}vh`;
 }
 
+// The window size the canvas was last fitted to (see windowResized).
+let canvasWindowSize;
+
+// A phone's browser resizes the window as its toolbars slide in and out while scrolling. Resizing
+// the canvas then would clear it and refit the swarm graph mid-scroll, so on a touch screen a change
+// in height alone, smaller than this (px), is ignored.
+const TOOLBAR_RESIZE_MAX = 160;
+
 // p5: keep the canvas the size of the window.
 function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
+    const isToolbarResize = window.matchMedia("(pointer: coarse)").matches &&
+        windowWidth === canvasWindowSize.width &&
+        Math.abs(windowHeight - canvasWindowSize.height) < TOOLBAR_RESIZE_MAX;
+    if (!isToolbarResize) fitCanvas();
+}
+
+// Size the canvas to the window, less the nav bar above it (nav.js), and everything laid out from it.
+function fitCanvas() {
+    canvasWindowSize = { width: windowWidth, height: windowHeight };
+    resizeCanvas(windowWidth, windowHeight - navHeight());
     updateFocusPlotRight();
     resizeSwarm(); // swarm.js
 }
@@ -351,22 +384,25 @@ function calloutLines(text) {
     return calloutLineCache.get(text);
 }
 
-// The screen box ({ left, right, top, bottom }) around the active step's text cards that are on
-// screen, or null if none are. Measured once per frame, however many callouts ask.
+// The box ({ left, right, top, bottom }, in canvas px) around the active step's text cards that are
+// on screen, or null if none are. Measured once per frame, however many callouts ask.
 let cardsBoxFrame = -1;
 let cardsBox = null;
 function visibleCardsBox() {
     if (cardsBoxFrame === frameCount) return cardsBox;
     cardsBoxFrame = frameCount;
     let box = null;
+    const canvasTop = navHeight(); // the canvas sits below the nav bar
     for (const card of stepElements[scrollState.stepIndex].querySelectorAll("p")) {
         const rect = card.getBoundingClientRect();
         if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
-        if (!box) box = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+        const top = rect.top - canvasTop;
+        const bottom = rect.bottom - canvasTop;
+        if (!box) box = { left: rect.left, right: rect.right, top, bottom };
         box.left = Math.min(box.left, rect.left);
         box.right = Math.max(box.right, rect.right);
-        box.top = Math.min(box.top, rect.top);
-        box.bottom = Math.max(box.bottom, rect.bottom);
+        box.top = Math.min(box.top, top);
+        box.bottom = Math.max(box.bottom, bottom);
     }
     cardsBox = box;
     return box;
@@ -393,7 +429,7 @@ function updateFocusPlotRight() {
 // A step's pinned text cards (the .step-pinned block), and the screen x where they start if they sit
 // on the right half of the screen (on a narrow screen they span it, so this is the full width).
 function pinnedCards(stepName) {
-    return document.querySelector(`[data-step="${stepName}"] .step-pinned`);
+    return document.querySelector(`#scrolly .step[data-step="${stepName}"] .step-pinned`);
 }
 function spaceLeftOfPinnedCards(stepName) {
     const cardsLeft = pinnedCards(stepName).getBoundingClientRect().left;
@@ -452,7 +488,7 @@ function showFamilyGrid(alphaFor, isGreyFor, highlightedIndex = -1) {
 // The family row under the mouse in the family grid, or -1. Only counts the mouse when it is
 // over the canvas itself (not over a text card) and inside the grid.
 function familyRowUnderMouse() {
-    const elementUnderMouse = document.elementFromPoint(mouseX, mouseY);
+    const elementUnderMouse = document.elementFromPoint(winMouseX, winMouseY); // in window px
     if (!elementUnderMouse || elementUnderMouse.tagName !== "CANVAS") return -1;
     if (mouseX < MARGIN || mouseX > width - MARGIN) return -1;
     const rowSpacing = (height - 2 * MARGIN) / (familyNames.length - 1);

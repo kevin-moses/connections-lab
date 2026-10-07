@@ -8,7 +8,7 @@
 //
 // Drawn whenever a "hook" or "hookScatter" step is active (scrollState), with no scene in
 // sketch.js. Uses these from sketch.js and revisions.js: MARGIN, PLOT_LEFT, EASING,
-// REVISION_COLORS, formatUTC, stepChangedAt, DAY_SECONDS.
+// revisionColor, revisionType, formatUTC, stepChangedAt, DAY_SECONDS.
 
 const HOOK = {
     pointSize: 10, // the first revision, alone in the middle of the screen
@@ -76,8 +76,8 @@ function setupHook(json) {
         const timeFraction = (revision.t - hookStart) / (hookEnd - hookStart);
         hookDots.push({
             data: revision, // the original record (shown in the tooltip)
-            type: revision.kind,
-            color: REVISION_COLORS[revision.kind] || "#ffffff", // same colours as the revisions timeline
+            type: revisionType(revision),
+            color: revisionColor(revision), // same colours as the revisions timeline and task families chart
             // 0 = bottom of the plot, 1 = top: a random height under the curve, so the dots fill it
             countFraction: (random() * curveCountAt(revision.t)) / hookCountMax,
             fadeDelay: HOOK.landingMs + timeFraction * HOOK.sweepMs,
