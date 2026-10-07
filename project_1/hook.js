@@ -1,7 +1,7 @@
 // The "hook" steps: the very first revision on its own, then every revision in a chart of
-// revisions per day. While the "hook" steps are active, one square sits in the middle of the
+// revisions per day. While the "hook" steps are active, one dot sits in the middle of the
 // screen: the first revision in the logs (2026-05-24 06:02 UTC, a page of US federal spending API
-// links on the DSE wiki). Once the first "hookScatter" step becomes active, that square drops into
+// links on the DSE wiki). Once the first "hookScatter" step becomes active, that dot drops into
 // a full-width chart of revisions per day (UTC): each dot sits at its own time, at a random height
 // under that day's total, so together the revisions fill in the area under the (undrawn) per-day
 // curve. The rest of the revisions then fade in left to right.
@@ -11,9 +11,10 @@
 // revisionColor, revisionType, formatUTC, stepChangedAt, DAY_SECONDS.
 
 const HOOK = {
-    pointSize: 10, // the first revision, alone in the middle of the screen
-    firstDotSize: 5, // the first revision once it is in the scatterplot
-    dotSize: 2, // every other revision
+    // dot diameters in px
+    pointSize: 15, // the first revision, alone in the middle of the screen
+    firstDotSize: 7.5, // the first revision once it is in the scatterplot
+    dotSize: 3, // every other revision
     landingMs: 600, // the other dots wait this long for the first one to land...
     sweepMs: 1500, // ...then fade in left to right (in time order) over this long
     dotFadeMs: 150, // how long one dot takes to fade in or out
@@ -148,9 +149,11 @@ function drawHookScatterDots(isScatter) {
         const y = hookScatterY(dot.countFraction);
         canvas.globalAlpha = dot.alpha;
         canvas.fillStyle = dot.color;
-        canvas.fillRect(x - size / 2, y - size / 2, size, size);
+        canvas.beginPath();
+        canvas.arc(x, y, size / 2, 0, TWO_PI);
+        canvas.fill();
 
-        const mouseIsOver = Math.abs(mouseX - x) < 3 && Math.abs(mouseY - y) < 3;
+        const mouseIsOver = Math.abs(mouseX - x) < size && Math.abs(mouseY - y) < size;
         if (dot.alpha === 1 && mouseIsOver) hovered = dot;
     }
     canvas.restore();
@@ -185,7 +188,9 @@ function drawFirstRevision(hookMode) {
     canvas.save();
     canvas.globalAlpha = first.alpha;
     canvas.fillStyle = first.color;
-    canvas.fillRect(first.x - first.size / 2, first.y - first.size / 2, first.size, first.size);
+    canvas.beginPath();
+    canvas.arc(first.x, first.y, first.size / 2, 0, TWO_PI);
+    canvas.fill();
     canvas.restore();
 
     const reach = Math.max(first.size / 2, 4);

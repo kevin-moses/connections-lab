@@ -134,7 +134,7 @@ body.has-nav #site-nav {
    only the text card catches the mouse, so the canvas stays hoverable around it */
 .step {
     position: relative; /* for .timeline-card */
-    max-width: 360px;
+    max-width: 468px;
     margin: 0 0 80vh;
     opacity: 0.35;
     transition: opacity 0.3s;
@@ -400,11 +400,11 @@ body.has-nav #site-nav {
     }
 }
 
-/* Narrow screens, where a 360px card can't fit in the right half (see spaceLeftOfPinnedCards in
+/* Narrow screens, where a 468px card can't fit in the right half (see spaceLeftOfPinnedCards in
    sketch.js), so pinned cards would cover the graph. The swarm step's intro card scrolls past as
    usual, and its panel is pinned along the bottom of the screen, full width, with the graph fitted
    in the space above it (see swarmGraphArea in swarm.js). */
-@media (max-width: 800px) {
+@media (max-width: 1040px) {
     .step[data-step="swarm"] {
         display: flex;
         flex-direction: column;
@@ -417,7 +417,7 @@ body.has-nav #site-nav {
     }
 
     .step[data-step="swarm"] p {
-        max-width: 360px;
+        max-width: 468px;
         margin-left: auto;
     }
 

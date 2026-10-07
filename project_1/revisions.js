@@ -1,6 +1,6 @@
 // The "revisions" step: every revision to the wiki (data/revision_timeline.json) on one timeline.
 // x = page (sorted by name, no labels), y = time. A revision that was a task action (post, confirm, …)
-// is coloured as on the task families chart; the rest are grey (see revisionColor). The timeline pans as you scroll. Time is
+// is coloured as on the task families chart; the rest by their kind of edit (see revisionColor). The timeline pans as you scroll. Time is
 // split into 6-hour blocks (TICK_SECONDS); when a block crosses the reveal line its dots fade
 // in one by one in random order, and they fade out again if you scroll back up past it.
 // The story's big moments (data/revision_moments.json) pop up beside their time as the reveal line
@@ -17,7 +17,7 @@ const REVISIONS = {
     screensPerDay: 0.5, // timeline length per day, in screen heights (also sets the step's height)
     blockRevealMs: 500, // every dot in a block is fully visible this long after the block is reached
     dotFadeMs: 150, // how long one dot takes to fade in or out
-    dotSize: 3,
+    dotSize: 4.5, // diameter in px
     revealLinePosition: 0.8, // reveal line (and current date/time), as a fraction of the canvas height
     // the step's .timeline-card paragraphs are spread evenly over this stretch of the timeline,
     // before the agents start coordinating on June 16
@@ -25,13 +25,22 @@ const REVISIONS = {
     cardsUntil: "2026-06-15T12:00:00Z",
 };
 
-// revisions that weren't a task action (see tagRevisionActions in sketch.js); darker than "ack"
-const NON_ACTION_COLOR = "#707070";
+// Revisions that weren't a task action (see tagRevisionActions in sketch.js), by kind of edit. These
+// share hues with some actions (creation and answer are both green, for example); the tooltip names
+// which it is.
+const KIND_COLORS = {
+    creation: "#5fb49c",
+    edit: "#6c8ebf",
+    append: "#f2c14e",
+    prune: "#ff3b3b",
+    noop: "#666666",
+    history_truncated: "#c3a1ff",
+};
 
 // A revision's colour on the scale and timeline charts: its task action's colour, the same as on the
-// task families chart (EVENT_COLORS in sketch.js), or grey if it wasn't one.
+// task families chart (EVENT_COLORS in sketch.js), or else its kind of edit's.
 function revisionColor(revision) {
-    return EVENT_COLORS[revision.action] || NON_ACTION_COLOR;
+    return EVENT_COLORS[revision.action] || KIND_COLORS[revision.kind] || "#ffffff";
 }
 
 // What a revision was, for its tooltip: its task action if it was one, else its kind of edit.
@@ -235,7 +244,9 @@ function drawRevisionDots() {
 
         canvas.globalAlpha = dot.alpha;
         canvas.fillStyle = dot.color;
-        canvas.fillRect(x - size / 2, y - size / 2, size, size);
+        canvas.beginPath();
+        canvas.arc(x, y, size / 2, 0, TWO_PI);
+        canvas.fill();
 
         const mouseIsOver = Math.abs(mouseX - x) < size && Math.abs(mouseY - y) < size;
         if (dot.alpha === 1 && mouseIsOver) hovered = dot;

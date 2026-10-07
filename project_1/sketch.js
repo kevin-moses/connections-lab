@@ -20,6 +20,7 @@ const PLOT_LEFT = 110; // x where timelines start; time labels sit to the left o
 
 // animation
 const EASING = 0.08; // fraction of the way dots move/fade toward their targets each frame
+const EVENT_DOT_RADIUS = 3.75; // task event dots (the task families and family scenes)
 const PAN_EASING = 0.2; // the same, for the vertical pan
 const GREY = "rgb(160, 160, 160)";
 
@@ -54,7 +55,7 @@ const CALLOUT = {
     lineHeight: 15,
     gap: 16, // between a circled dot and its box, and between the plot and the pinned text cards
     stackGap: 6, // between stacked boxes (see the minTop argument of drawCallout)
-    ringSize: 12, // diameter of the circle around a dot
+    ringSize: 14, // diameter of the circle around a dot
 };
 
 // time axis: one tick line every 6 hours (also the size of the revisions reveal blocks)
@@ -716,10 +717,10 @@ function drawEventDots(stepChanged) {
         canvas.globalAlpha = dot.alpha / 255;
         canvas.fillStyle = eventDotColor(dot);
         canvas.beginPath();
-        canvas.arc(dot.x, screenY, 2.5, 0, TWO_PI);
+        canvas.arc(dot.x, screenY, EVENT_DOT_RADIUS, 0, TWO_PI);
         canvas.fill();
 
-        const mouseIsOver = dist(mouseX, mouseY, dot.x, screenY) < 4;
+        const mouseIsOver = dist(mouseX, mouseY, dot.x, screenY) < EVENT_DOT_RADIUS + 2;
         if (dot.alpha > 100 && mouseIsOver) hovered = dot;
     }
     canvas.restore();
@@ -734,8 +735,8 @@ function eventDotColor(dot) {
     return `rgb(${red}, ${green}, ${blue})`;
 }
 
-// Tooltip for the dot under the mouse (an event, revision or hook dot), if any: who, what, where,
-// when, and the start of the message, in a box beside the cursor.
+// Tooltip for the dot under the mouse (an event, revision or hook dot), if any: who and what (in the
+// dot's colour), where, when, and the start of the message, in a box beside the cursor.
 function drawTooltip(hovered) {
     if (!hovered) return;
     const info = hovered.data;
@@ -743,11 +744,13 @@ function drawTooltip(hovered) {
     if (message.length > TOOLTIP.maxChars) {
         message = message.slice(0, TOOLTIP.maxChars) + "…";
     }
-    const paragraphs = [`${info.label} · ${hovered.type}`, info.page, info.iso, "", ...message.split("\n")];
+    const details = [info.page, info.iso, "", ...message.split("\n")];
 
     // word-wrap each paragraph to fit inside the box
     textSize(TOOLTIP.textSize);
-    const lines = wrapParagraphs(paragraphs, TOOLTIP.width - 2 * TOOLTIP.padding);
+    const wrapWidth = TOOLTIP.width - 2 * TOOLTIP.padding;
+    const titleLines = wrapParagraphs([`${info.label} · ${hovered.type}`], wrapWidth);
+    const lines = [...titleLines, ...wrapParagraphs(details, wrapWidth)];
 
     // box beside the cursor, kept inside the canvas
     const boxHeight = lines.length * TOOLTIP.lineHeight + 2 * TOOLTIP.padding;
@@ -758,9 +761,9 @@ function drawTooltip(hovered) {
     rect(boxX, boxY, TOOLTIP.width, boxHeight);
 
     noStroke();
-    fill(240);
     textAlign(LEFT, TOP);
     for (let i = 0; i < lines.length; i++) {
+        fill(i < titleLines.length ? hovered.color : 240);
         const lineY = boxY + TOOLTIP.padding + i * TOOLTIP.lineHeight;
         text(lines[i], boxX + TOOLTIP.padding, lineY);
     }
