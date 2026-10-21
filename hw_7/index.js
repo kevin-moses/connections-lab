@@ -1,7 +1,7 @@
 import express from "express";
 import { JSONFilePreset } from "lowdb/node";
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 const db = await JSONFilePreset("db.json", { posts: [] });
 
