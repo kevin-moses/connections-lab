@@ -1,0 +1,39 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subway Sightings</title>
+    </head>
+    <link rel="stylesheet" href="main.css">
+    <body>
+        <h1>Subway Sightings</h1>
+
+        <form id="post-form">
+            <input id="author" placeholder="Your name" required>
+            <input id="title" placeholder="Title" required>
+            <textarea id="content" placeholder="What happened?" required></textarea>
+            <select id="tag">
+                <option value="sighting">Sighting</option>
+                <option value="missed connection">Missed Connection</option>
+                <option value="lost item">Lost Item</option>
+                <option value="other">Other</option>
+            </select>
+            <input id="train_name" placeholder="Train (e.g. L)" required>
+            <select id="train_bound">
+                <option value="uptown">Uptown</option>
+                <option value="downtown">Downtown</option>
+                <option value="manhattan-bound">Manhattan-bound</option>
+                <option value="brooklyn-bound">Brooklyn-bound</option>
+                <option value="queens-bound">Queens-bound</option>
+            </select>
+            <label><input type="checkbox" id="in_train" checked> On the train</label>
+            <input id="station_name" placeholder="Station name" hidden>
+            <button type="submit">Post</button>
+        </form>
+
+        <button id="load-posts">Load Posts</button>
+        <div id="posts"></div>
+
+        <script src="app.js"></script>
+    </body>
+</html>
