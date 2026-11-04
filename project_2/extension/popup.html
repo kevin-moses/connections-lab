@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Soundboard</title>
+        <style>
+            body { width: 260px; font-family: sans-serif; margin: 12px; }
+            h1 { font-size: 18px; margin: 0 0 8px; }
+            #board { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+            button { padding: 8px 4px; cursor: pointer; }
+            #server { width: 100%; box-sizing: border-box; }
+            p { margin: 8px 0; font-size: 13px; }
+        </style>
+    </head>
+    <body>
+        <h1>Soundboard</h1>
+        <p><span id="connection">Connecting...</span> · Users: <span id="count">0</span></p>
+        <div id="board"></div>
+        <p id="status"></p>
+        <label>Server <input id="server" type="url"></label>
+        <script src="config.js"></script>
+        <script src="popup.js"></script>
+    </body>
+</html>

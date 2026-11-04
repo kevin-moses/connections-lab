@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Soundboard",
+  "version": "1.0.0",
+  "description": "Press a button to play a sound on everyone else's browser.",
+  "action": {
+    "default_title": "Soundboard",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "offscreen",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://connections-lab-production.up.railway.app/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ]
+}
