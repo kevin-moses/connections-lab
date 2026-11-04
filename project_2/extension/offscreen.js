@@ -1,4 +1,6 @@
 let socket = null;
+let muted = false;
+const playing = new Set();
 let state = {connected: false, count: 0, lastReceived: ""};
 
 function publish() {
@@ -6,7 +8,12 @@ function publish() {
 }
 
 function playSound(name) {
-    new Audio("assets/" + encodeURIComponent(name) + ".mp3").play();
+    // older clients send names without an extension
+    const file = /\.\w+$/.test(name) ? name : name + ".mp3";
+    const audio = new Audio("assets/" + encodeURIComponent(file));
+    playing.add(audio);
+    audio.addEventListener("ended", () => playing.delete(audio));
+    audio.play();
 }
 
 function connect(url) {
@@ -28,7 +35,7 @@ function connect(url) {
     socket.on("playSound", (data) => {
         state.lastReceived = data.sound;
         publish();
-        playSound(data.sound);
+        if (!muted) playSound(data.sound);
     })
 
     socket.on("userCount", (count) => {
@@ -44,8 +51,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (socket) socket.emit("sendSound", message.sound);
     } else if (message.type === "setServer") {
         connect(message.url);
+    } else if (message.type === "setMuted") {
+        muted = message.muted;
+        // cut off anything already playing
+        if (muted) playing.forEach((audio) => audio.pause());
+        playing.clear();
     }
 })
 
-// offscreen documents can't use chrome.storage, so the service worker reads it for us
-chrome.runtime.sendMessage({type: "getServer"}).then((server) => connect(server || DEFAULT_SERVER));
+// offscreen documents can't use chrome.storage, so the service worker reads settings for us
+chrome.runtime.sendMessage({type: "getSettings"}).then((settings) => {
+    muted = settings.muted;
+    connect(settings.server);
+});

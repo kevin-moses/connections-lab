@@ -4,12 +4,26 @@
         <meta charset="UTF-8">
         <title>Soundboard</title>
         <style>
-            body { width: 260px; font-family: sans-serif; margin: 12px; }
+            html { background: #000; }
+            body { width: 260px; font-family: sans-serif; margin: 12px; background: #000; color: #fff; }
             h1 { font-size: 18px; margin: 0 0 8px; }
             #board { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-            button { padding: 8px 4px; cursor: pointer; }
-            #server { width: 100%; box-sizing: border-box; }
+            button { padding: 8px 4px; cursor: pointer; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; }
+            button:hover { background: #3a3a3a; border-color: #888; }
+            button:active { background: #555; }
+            button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+            #server { width: 100%; box-sizing: border-box; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 4px; }
+            .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 8px 0; cursor: pointer; }
+            .toggle input { position: absolute; opacity: 0; }
+            .switch { position: relative; width: 36px; height: 20px; border-radius: 10px; background: #555; transition: background .15s; }
+            .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+            .toggle input:checked + .switch { background: #fff; }
+            .toggle input:checked + .switch::after { left: 18px; background: #000; }
+            .toggle input:focus-visible + .switch { outline: 2px solid #fff; outline-offset: 2px; }
             p { margin: 8px 0; font-size: 13px; }
+            #connection, #status, label { color: #aaa; }
+            #count { color: #fff; }
+            h1 { border-bottom: 1px solid #333; padding-bottom: 8px; }
         </style>
     </head>
     <body>
@@ -17,6 +31,10 @@
         <p><span id="connection">Connecting...</span> · Users: <span id="count">0</span></p>
         <div id="board"></div>
         <p id="status"></p>
+        <label class="toggle">Mute:
+            <input id="mute" type="checkbox">
+            <span class="switch"></span>
+        </label>
         <label>Server <input id="server" type="url"></label>
         <script src="config.js"></script>
         <script src="popup.js"></script>

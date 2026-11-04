@@ -18,8 +18,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "ensureOffscreen") {
         ensureOffscreen().then(() => sendResponse({ok: true}));
         return true;
-    } else if (message.type === "getServer") {
-        chrome.storage.sync.get({server: DEFAULT_SERVER}).then(({server}) => sendResponse(server));
+    } else if (message.type === "getSettings") {
+        chrome.storage.sync.get({server: DEFAULT_SERVER, muted: false}).then(sendResponse);
         return true;
     }
 })
