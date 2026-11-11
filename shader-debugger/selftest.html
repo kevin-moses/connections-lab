@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stepper Self-test</title>
+    <style>
+      body { margin: 0; padding: 20px; background: #0d0f13; color: #d8dbe2; font: 13px/1.5 ui-monospace, Menlo, monospace; }
+      h1 { font: 600 16px ui-sans-serif, system-ui, sans-serif; margin: 0 0 4px; }
+      p { color: #9ba1ad; margin: 0 0 16px; font-family: ui-sans-serif, system-ui, sans-serif; }
+      table { border-collapse: collapse; }
+      td, th { padding: 4px 12px; border-bottom: 1px solid #232733; text-align: left; }
+      th { color: #9ba1ad; font-weight: 500; }
+      .ok { color: #7ee2a8; } .bad { color: #ff6b6b; } .warn { color: #ffd166; }
+      canvas { position: absolute; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <h1>Stepper self-test</h1>
+    <p>Each shader runs on the GPU and through the CPU interpreter for a grid of pixels; the outputs must agree within tolerance.</p>
+    <div id="summary"></div>
+    <table id="results"><thead><tr><th>shader</th><th>pixels</th><th>result</th><th>max diff</th><th>notes</th></tr></thead><tbody></tbody></table>
+    <canvas id="c"></canvas>
+    <script type="module" src="/src/selftest.ts"></script>
+  </body>
+</html>

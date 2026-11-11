@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shader Debugger</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Shader Debugger</span>
+        <span class="badge">sandbox</span>
+      </div>
+      <div class="transport">
+        <button id="play" class="btn" title="Pause time">Pause</button>
+        <button id="reset-time" class="btn" title="Reset u_time to 0">Reset time</button>
+        <span class="readout"><span class="label">u_time</span> <span id="time">0.00</span></span>
+        <span class="readout"><span class="label">res</span> <span id="res">–</span></span>
+        <span class="readout"><span class="label">fps</span> <span id="fps">–</span></span>
+      </div>
+      <div class="status">
+        <span id="status-compile" class="pill" title="GPU compile status">GPU …</span>
+        <span id="status-ast" class="pill" title="Debugger parser status">AST …</span>
+        <span id="status-tutor" class="pill" title="Tutor proxy status">Tutor …</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="pane editor-pane">
+        <div class="pane-head">
+          <span class="file-name">fragment.glsl</span>
+          <div class="head-actions">
+            <button id="reset-code" class="btn btn-quiet" title="Replace your code with the example shader">Load example</button>
+            <button id="inspect" class="btn btn-toggle" aria-pressed="false" title="Show the value under your cursor across the whole canvas">
+              <span class="toggle-dot" aria-hidden="true"></span>Inspect values
+            </button>
+          </div>
+        </div>
+        <div id="editor" class="editor-host"></div>
+      </section>
+
+      <section class="pane view-pane">
+        <div id="probe-bar" class="probe-bar" hidden>
+          <div class="probe-row">
+            <div class="probe-what">
+              <code id="probe-expr" class="probe-expr">–</code>
+              <span id="probe-type" class="probe-type"></span>
+              <span id="probe-where" class="probe-where"></span>
+            </div>
+            <div class="probe-controls">
+              <div id="mode-seg" class="seg" role="group" aria-label="Visualization">
+                <button data-mode="raw" class="active" title="What the GPU shows: clamped to 0..1, out-of-range hatched">Raw</button>
+                <button data-mode="diverging" title="Blue below 0, red above, white at 0">Diverging</button>
+                <button data-mode="auto" title="Stretch min..max to black..white">Auto</button>
+              </div>
+              <div id="channel-seg" class="seg" role="group" aria-label="Component">
+                <button data-channel="-1" class="active">all</button>
+                <button data-channel="0">x</button>
+                <button data-channel="1">y</button>
+                <button data-channel="2">z</button>
+                <button data-channel="3">w</button>
+              </div>
+              <label id="iter-wrap" class="iter" hidden>
+                <span>loop pass</span>
+                <select id="iter"></select>
+              </label>
+            </div>
+          </div>
+          <div class="probe-row probe-sub">
+            <div id="probe-legend" class="probe-legend"></div>
+            <div id="probe-message" class="probe-message"></div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="view"></canvas>
+          <div id="canvas-error" class="canvas-error" hidden></div>
+          <div id="readout" class="readout-tip" hidden></div>
+          <div id="marker-a" class="px-marker a" hidden><span>A</span></div>
+          <div id="marker-b" class="px-marker b" hidden><span>B</span></div>
+        </div>
+        <div id="bottom" class="bottom">
+          <div class="tabs" role="tablist">
+            <button role="tab" class="tab" id="tab-debug" data-tab="debug" aria-selected="false">Debugger</button>
+            <button role="tab" class="tab" id="tab-problems" data-tab="problems" aria-selected="true">
+              Problems <span id="problem-count" class="count">0</span>
+            </button>
+            <span class="tab-hint">Click a pixel to step through it · Shift-click a second to compare</span>
+          </div>
+
+          <section id="panel-problems" class="tab-panel" role="tabpanel">
+            <ul id="problems" class="problem-list"></ul>
+          </section>
+
+          <section id="panel-debug" class="tab-panel debug" role="tabpanel" tabindex="0" hidden>
+            <div id="dbg-empty" class="dbg-empty">
+              Click any pixel on the canvas. The shader runs for just that pixel, and you can step through it line by line.
+            </div>
+            <div id="dbg-main" hidden>
+              <div class="dbg-head">
+                <div id="dbg-pixels" class="dbg-pixels"></div>
+                <div class="dbg-head-right">
+                  <span id="dbg-check" class="pill"></span>
+                  <button id="dbg-refresh" class="btn btn-quiet" title="Run again with the current time and mouse">Re-run now</button>
+                  <button id="dbg-close" class="btn btn-quiet" title="Stop debugging (Esc)">Close</button>
+                </div>
+              </div>
+              <div class="dbg-controls">
+                <div class="seg dbg-buttons" role="group" aria-label="Step controls">
+                  <button data-nav="start" title="First step (Home)">⏮</button>
+                  <button data-nav="backOver" title="Back over calls (Shift+←)">⤺</button>
+                  <button data-nav="back" title="Step back (←)">◀</button>
+                  <button data-nav="step" title="Step into (→)">▶</button>
+                  <button data-nav="over" title="Step over calls (Shift+→)">⤼</button>
+                  <button data-nav="out" title="Step out of this function">⤴</button>
+                  <button data-nav="end" title="Last step (End)">⏭</button>
+                  <button data-nav="cursor" title="Run to the line your editor cursor is on">⇥ cursor</button>
+                </div>
+                <input id="dbg-slider" class="dbg-slider" type="range" min="0" max="0" value="0" aria-label="Timeline" />
+                <span id="dbg-count" class="dbg-count">0 / 0</span>
+              </div>
+              <div id="dbg-now" class="dbg-now"></div>
+              <div class="dbg-body">
+                <div class="dbg-vars-wrap"><table id="dbg-vars" class="dbg-vars"></table></div>
+                <div class="dbg-side">
+                  <div class="dbg-side-title">Call stack</div>
+                  <ol id="dbg-stack" class="dbg-stack"></ol>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
