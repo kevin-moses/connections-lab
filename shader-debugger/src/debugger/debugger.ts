@@ -2,7 +2,7 @@ import type { Program } from '@shaderfrog/glsl-parser/ast';
 import type { ShaderRunner } from '../render/runner';
 import type { CanonicalUniforms } from '../render/gl';
 import type { ShaderEditor } from '../editor/editor';
-import { traceFragment, type TraceResult, type TraceStep, type VarSnap } from '../interp/interpreter';
+import { traceCall, traceFragment, type TraceResult, type TraceStep, type VarSnap } from '../interp/interpreter';
 import { crossCheck, type CrossCheck } from '../interp/crossCheck';
 import { formatNumber, formatValue, isArrayValue, valueTypeName, type AnyValue } from '../interp/values';
 import {
@@ -40,10 +40,13 @@ export interface DebuggerUI {
   canvasWrap: HTMLElement;
 }
 
+/** One traced run: a pixel, or a single function call from a test. */
 interface PixelRun {
-  pixel: [number, number];
+  pixel: [number, number] | null;
+  call: string | null;
   trace: TraceResult;
-  check: CrossCheck;
+  /** GPU comparison; null for function calls (no pixel to compare). */
+  check: CrossCheck | null;
 }
 
 const CLICK_SLOP_PX = 4;
@@ -122,8 +125,35 @@ export class Debugger {
     this.render();
   }
 
+  /** Step through one pixel with the given uniforms (e.g. a lesson prediction). */
+  stepPixel(pixel: [number, number], uniforms: CanonicalUniforms): void {
+    if (!this.ast || !this.compiled) return;
+    this.frozen = uniforms;
+    this.a = this.run(pixel);
+    this.b = null;
+    this.cur = 0;
+    this.open();
+  }
+
+  /** Step through a single call, e.g. a failing function test. */
+  stepCall(call: string): void {
+    if (!this.ast) return;
+    this.frozen = this.runner.currentUniforms();
+    this.a = this.runCall(call);
+    this.b = null;
+    this.cur = 0;
+    this.open();
+  }
+
+  private open(): void {
+    this.showTab('debug');
+    this.ui.panelDebug.focus({ preventScroll: true });
+    this.render();
+  }
+
   private pick(pixel: [number, number], which: 'a' | 'b'): void {
     if (!this.ast || !this.compiled) return;
+    if (which === 'b' && !this.a?.pixel) which = 'a';
     if (which === 'a' || !this.frozen) this.frozen = this.runner.currentUniforms();
     const run = this.run(pixel);
     if (which === 'a') {
@@ -145,14 +175,27 @@ export class Debugger {
       uniforms: { u_resolution: u.resolution, u_time: u.time, u_mouse: u.mouse },
     });
     const gpu = this.runner.readOutputAt(pixel[0], pixel[1], u);
-    return { pixel, trace, check: crossCheck(trace, gpu) };
+    return { pixel, call: null, trace, check: crossCheck(trace, gpu) };
+  }
+
+  private runCall(call: string): PixelRun {
+    const u = this.frozen!;
+    const trace = traceCall(this.ast!, call, {
+      pixel: [0, 0],
+      uniforms: { u_resolution: u.resolution, u_time: u.time, u_mouse: u.mouse },
+    });
+    return { pixel: null, call, trace, check: null };
+  }
+
+  private rerun(r: PixelRun): PixelRun {
+    return r.call !== null ? this.runCall(r.call) : this.run(r.pixel!);
   }
 
   private retrace(): void {
     if (!this.a || !this.ast) return;
     const old = this.a.trace.steps;
-    this.a = this.run(this.a.pixel);
-    if (this.b) this.b = this.run(this.b.pixel);
+    this.a = this.rerun(this.a);
+    if (this.b) this.b = this.rerun(this.b);
     const steps = this.a.trace.steps;
     // Stay on the same line occurrence if it still exists.
     const aligned = old.length ? alignStep(old, Math.min(this.cur, old.length - 1), steps) : null;
@@ -227,7 +270,9 @@ export class Debugger {
     const chip = (which: 'a' | 'b', run: PixelRun) => {
       const span = document.createElement('span');
       span.className = `pixel-chip ${which}`;
-      span.innerHTML = `<span class="dot"></span>${which.toUpperCase()} (${run.pixel[0]}, ${run.pixel[1]})`;
+      span.innerHTML = run.pixel
+        ? `<span class="dot"></span>${which.toUpperCase()} (${run.pixel[0]}, ${run.pixel[1]})`
+        : `<span class="dot"></span>test: <code>${esc(run.call ?? '')}</code>`;
       const x = document.createElement('button');
       x.textContent = '×';
       x.title = which === 'a' ? 'Stop debugging' : 'Stop comparing';
@@ -240,13 +285,20 @@ export class Debugger {
     const meta = document.createElement('span');
     meta.className = 'pixel-meta';
     const u = this.frozen!;
-    meta.textContent = `t = ${u.time.toFixed(2)}s${this.b ? '' : ' · shift-click to compare'}`;
+    meta.textContent = this.a!.pixel ? `t = ${u.time.toFixed(2)}s${this.b ? '' : ' · shift-click to compare'}` : 'runs your function on the CPU';
     parts.push(meta);
     this.ui.pixels.replaceChildren(...parts);
   }
 
   private renderCheck(): void {
     const checks = [this.a!.check, this.b?.check].filter((c): c is CrossCheck => !!c);
+    const el0 = this.ui.check;
+    if (!checks.length) {
+      el0.textContent = 'CPU only';
+      el0.className = 'pill';
+      el0.title = 'A function test has no pixel, so there is nothing to compare with the GPU.';
+      return;
+    }
     const worst = checks.find((c) => c.status === 'mismatch') ?? checks.find((c) => c.status === 'unavailable') ?? checks[0];
     const el = this.ui.check;
     const label = { match: 'GPU ✓ agrees', mismatch: 'GPU ≠ stepper', unavailable: 'GPU –' }[worst.status];
@@ -346,7 +398,7 @@ export class Debugger {
 
   private placeMarkers(): void {
     const place = (el: HTMLElement, run: PixelRun | null) => {
-      if (!run || !this.frozen) {
+      if (!run?.pixel || !this.frozen) {
         el.hidden = true;
         return;
       }

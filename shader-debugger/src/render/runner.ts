@@ -69,7 +69,7 @@ export class ShaderRunner {
    */
   constructor(
     private readonly canvas: HTMLCanvasElement,
-    private readonly fixedSize: [number, number] | null = null,
+    private fixedSize: [number, number] | null = null,
   ) {
     const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
     if (!gl) throw new Error('WebGL2 is not available in this browser.');
@@ -183,6 +183,16 @@ export class ShaderRunner {
     this.accumulated = 0;
     this.playStartedAt = performance.now();
     this.probe.invalidateStats();
+  }
+
+  /** Render at exactly this many pixels (lessons), or null to follow the CSS size. */
+  setFixedSize(size: [number, number] | null): void {
+    this.fixedSize = size;
+    this.probe.invalidateStats();
+  }
+
+  get fixed(): [number, number] | null {
+    return this.fixedSize;
   }
 
   /** The uniforms the next frame would use (to freeze them for a trace). */

@@ -1,0 +1,68 @@
+{
+  "title": "Fix the aspect ratio",
+  "canvas": [
+    600,
+    300
+  ],
+  "variants": [
+    {
+      "size": [
+        96,
+        48
+      ]
+    },
+    {
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "size": [
+        48,
+        96
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "The center is white",
+      "at": [
+        0.5,
+        0.5
+      ],
+      "expect": [
+        1,
+        1,
+        1
+      ],
+      "tol": 0.06
+    },
+    {
+      "type": "pixel",
+      "label": "On a wide canvas, halfway to the right edge is already 1 unit away (black)",
+      "at": [
+        0.75,
+        0.5
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.06
+    }
+  ],
+  "predict": {
+    "question": "On this 600\u00d7300 canvas, the right edge is 300 px from the center and the top edge only 150 px. What is **`d`** (the distance from the center) at the middle of the **right edge**?",
+    "at": [
+      1.0,
+      0.5
+    ],
+    "expr": "d",
+    "kind": "number",
+    "tolerance": 0.03,
+    "explain": "**1**, the same as at the top edge, even though it's twice as far in pixels. uv stretches to \u22121..1 in *both* directions, so a step in x covers more pixels than the same step in y. That's why the glow is an oval."
+  }
+}

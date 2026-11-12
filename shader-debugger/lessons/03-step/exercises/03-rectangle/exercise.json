@@ -1,0 +1,72 @@
+{
+  "title": "A rectangle",
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "Inside the rectangle is white",
+      "at": [
+        0.5,
+        0.45
+      ],
+      "expect": [
+        1,
+        1,
+        1
+      ],
+      "tol": 0.02
+    },
+    {
+      "type": "pixel",
+      "label": "Above it is black",
+      "at": [
+        0.5,
+        0.8
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.02
+    },
+    {
+      "type": "pixel",
+      "label": "Below it is black",
+      "at": [
+        0.5,
+        0.15
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.02
+    },
+    {
+      "type": "pixel",
+      "label": "To its left is black",
+      "at": [
+        0.1,
+        0.45
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.02
+    }
+  ],
+  "predict": {
+    "question": "Once `bandY` is `step(0.3, uv.y) * (1.0 - step(0.6, uv.y))`, what will **`bandX * bandY`** be at the point **(0.5, 0.9)**, above the rectangle?",
+    "at": [
+      0.5,
+      0.9
+    ],
+    "expr": "bandX * step(0.3, uv.y) * (1.0 - step(0.6, uv.y))",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "bandX is 1 there (x = 0.5 is inside the x range) but bandY is 0 (y = 0.9 is above 0.6), and 1 \u00d7 0 = **0**. Both bands must agree."
+  }
+}

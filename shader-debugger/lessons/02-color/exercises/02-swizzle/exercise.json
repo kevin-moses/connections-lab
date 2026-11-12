@@ -1,0 +1,77 @@
+{
+  "title": "Swizzling",
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "Top-left is red",
+      "at": [
+        0.02,
+        0.98
+      ],
+      "expect": [
+        1,
+        0,
+        0
+      ],
+      "tol": 0.06
+    },
+    {
+      "type": "pixel",
+      "label": "Bottom-right is cyan",
+      "at": [
+        0.98,
+        0.02
+      ],
+      "expect": [
+        0,
+        1,
+        1
+      ],
+      "tol": 0.06
+    }
+  ],
+  "predict": {
+    "question": "`uv.yxx` builds a vec3 from uv's components: y, then x, then x. At the **bottom-right** corner, uv \u2248 (1, 0). What color is `uv.yxx` there?",
+    "at": [
+      0.98,
+      0.02
+    ],
+    "expr": "uv.yxx",
+    "kind": "choice",
+    "choices": [
+      {
+        "label": "Red (1, 0, 0)",
+        "value": [
+          1,
+          0,
+          0
+        ]
+      },
+      {
+        "label": "Cyan (0, 1, 1)",
+        "value": [
+          0,
+          1,
+          1
+        ]
+      },
+      {
+        "label": "Yellow (1, 1, 0)",
+        "value": [
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "label": "Blue (0, 0, 1)",
+        "value": [
+          0,
+          0,
+          1
+        ]
+      }
+    ],
+    "explain": "y is 0, then x is 1 twice: **(0, 1, 1)**, which is cyan. A swizzle just picks components in the order you write them, and it can repeat them."
+  }
+}

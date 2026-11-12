@@ -190,6 +190,8 @@ export interface ShaderEditor {
   jumpToLine(line: number): void;
   /** Scroll a line into view without moving the cursor. */
   revealLine(line: number): void;
+  /** Swap in new code with a fresh undo history (e.g. switching exercises). */
+  replaceDocument(doc: string): void;
 }
 
 export function createEditor(
@@ -229,6 +231,9 @@ export function createEditor(
       view.dispatch({ effects: setDebugDecorations.of(decos) });
     },
     cursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
+    replaceDocument(doc) {
+      view.setState(EditorState.create({ doc, extensions }));
+    },
     revealLine(line) {
       const doc = view.state.doc;
       if (line < 1 || line > doc.lines) return;

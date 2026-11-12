@@ -45,6 +45,16 @@ export interface TraceInputs {
 export interface TraceOptions {
   /** Stop recording after this many steps. */
   maxSteps?: number;
+  /**
+   * Record a snapshot per step (default true). Turn off when only the final
+   * output matters, e.g. rendering a whole image on the CPU.
+   */
+  record?: boolean;
+  /**
+   * Evaluate this expression in main()'s scope just before it returns
+   * (e.g. `uv.x` or `mix(a, b, 0.25).r`). Result lands in `finalValue`.
+   */
+  finalExpression?: string;
   /** Stop a single loop after this many passes. */
   maxLoopIterations?: number;
 }
@@ -98,6 +108,9 @@ export interface TraceResult {
   truncated: boolean;
   /** Uniforms and built-in inputs, for display. */
   inputs: VarSnap[];
+  /** Value of `options.finalExpression`, if asked for. */
+  finalValue?: AnyValue | null;
+  finalError?: string;
 }
 
 // ---------- internals ----------
@@ -162,7 +175,31 @@ const DEFAULT_MAX_LOOP = 1000;
 
 /** Run the fragment shader for one pixel on the CPU and record every step. */
 export function traceFragment(ast: Program, inputs: TraceInputs, options: TraceOptions = {}): TraceResult {
-  return new Interpreter(ast, inputs, options).run();
+  return new Interpreter(ast, inputs, options).run(null);
+}
+
+/**
+ * Evaluate one expression (usually a call to the learner's function, e.g.
+ * `rect(vec2(0.5), vec2(0.2), vec2(0.8))`) with the shader's globals set up,
+ * recording every step inside it. `output` holds the expression's value.
+ */
+export function traceCall(ast: Program, expression: string, inputs: TraceInputs, options: TraceOptions = {}): TraceResult {
+  let expr: AstNode;
+  try {
+    expr = parseExpression(expression);
+  } catch {
+    return { steps: [], output: null, discarded: false, error: { message: `Can't parse ${expression}`, line: null }, truncated: false, inputs: [] };
+  }
+  return new Interpreter(ast, inputs, options).run({ expr, text: expression });
+}
+
+/** Parse a standalone GLSL expression. */
+export function parseExpression(expression: string): AstNode {
+  const prog = parser.parse(`void __e() { __x = (${expression}); }`, { quiet: true });
+  const fn = prog.program[0] as FunctionNode;
+  const stmt = fn.body.statements[0] as unknown as { expression: { right: AstNode } };
+  const group = stmt.expression.right as unknown as { expression: AstNode };
+  return group.expression;
 }
 
 class Interpreter {
@@ -173,6 +210,11 @@ class Interpreter {
   private readonly frames: Frame[] = [];
   private readonly maxSteps: number;
   private readonly maxLoop: number;
+  private readonly record: boolean;
+  private readonly finalExpression: string | null;
+  private finalValue: AnyValue | null = null;
+  private finalError: string | undefined;
+  private stepCount = 0;
   private line = 0;
   private outputName: string | null = null;
 
@@ -182,10 +224,12 @@ class Interpreter {
     options: TraceOptions,
   ) {
     this.maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
+    this.record = options.record ?? true;
+    this.finalExpression = options.finalExpression ?? null;
     this.maxLoop = options.maxLoopIterations ?? DEFAULT_MAX_LOOP;
   }
 
-  run(): TraceResult {
+  run(entry: { expr: AstNode; text: string } | null): TraceResult {
     const result: TraceResult = { steps: this.steps, output: null, discarded: false, error: null, truncated: false, inputs: [] };
     try {
       this.setupGlobals();
@@ -193,11 +237,24 @@ class Interpreter {
         .filter(([, b]) => b.kind === 'uniform' || b.kind === 'input')
         .map(([name, b]) => ({ name, value: clone(b.value) }));
 
+      if (entry) {
+        this.pushFrame('test', 0);
+        const value = this.evaluate(entry.expr);
+        if (!isArrayValue(value)) result.output = { name: entry.text, value: clone(value) };
+        this.emit('end', this.steps.at(-1)?.line ?? 0, `${entry.text} = ${formatValue(value)}`);
+        this.frames.pop();
+        return result;
+      }
+
       const main = this.functions.get('main')?.[0];
       if (!main) throw new GlslRuntimeError('No main() function.');
       this.invoke(main, [], main.line);
       const out = this.outputName ? this.globals.vars.get(this.outputName) : undefined;
       if (out && !isArrayValue(out.value)) result.output = { name: this.outputName!, value: clone(out.value) };
+      if (this.finalExpression) {
+        result.finalValue = this.finalValue;
+        result.finalError = this.finalError;
+      }
     } catch (e) {
       if (e instanceof DiscardSignal) {
         result.discarded = true;
@@ -361,8 +418,13 @@ class Interpreter {
 
   private emit(kind: StepKind, line: number, text: string): void {
     const frame = this.frame;
-    if (this.steps.length >= this.maxSteps) throw new StepLimit();
+    if (++this.stepCount > this.maxSteps) throw new StepLimit();
     frame.line = line;
+    if (!this.record) {
+      frame.changed = new Set();
+      frame.builtins = [];
+      return;
+    }
 
     // Locals: walk root → innermost so inner declarations shadow outer ones.
     const chain: Scope[] = [];
@@ -420,6 +482,13 @@ class Interpreter {
     let completion: Completion = NORMAL;
     try {
       completion = this.execBlock(fn.node.body.statements as AstNode[], frame.root);
+      if (this.frames.length === 1 && this.finalExpression) {
+        try {
+          this.finalValue = clone(this.evaluate(parseExpression(this.finalExpression)));
+        } catch (e) {
+          this.finalError = (e as Error).message;
+        }
+      }
       if (this.frames.length === 1) {
         // Entry point finished: one last step showing the output.
         const out = this.outputName ? this.globals.vars.get(this.outputName) : undefined;

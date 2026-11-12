@@ -1,0 +1,52 @@
+{
+  "title": "Out of range",
+  "tests": [
+    {
+      "type": "increasing",
+      "label": "Brightness rises steadily from left to right",
+      "channel": "r",
+      "axis": "x",
+      "at": 0.5,
+      "rise": 0.9
+    },
+    {
+      "type": "pixel",
+      "label": "A quarter of the way across is dark gray (0.25), not black",
+      "at": [
+        0.25,
+        0.5
+      ],
+      "expect": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "tol": 0.03
+    }
+  ],
+  "predict": {
+    "question": "`v` runs from \u22121 on the left to +1 on the right. At the pixel **a quarter of the way across**, v \u2248 \u22120.5. What does the screen show there?",
+    "at": [
+      0.25,
+      0.5
+    ],
+    "expr": "fragColor.r",
+    "kind": "choice",
+    "clamp": true,
+    "choices": [
+      {
+        "label": "Black (0)",
+        "value": 0
+      },
+      {
+        "label": "Dark gray (0.25)",
+        "value": 0.25
+      },
+      {
+        "label": "Mid gray (0.5)",
+        "value": 0.5
+      }
+    ],
+    "explain": "**Black.** The GPU clamps \u22120.5 to 0. The whole left half is \"too dark to show\". Inspect `v` to see that half hatched."
+  }
+}

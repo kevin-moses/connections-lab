@@ -10,7 +10,10 @@
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">Shader Debugger</span>
-        <span class="badge">sandbox</span>
+        <div id="mode-switch" class="seg mode-switch" role="group" aria-label="Mode">
+          <button data-mode="lessons">Lessons</button>
+          <button data-mode="sandbox">Sandbox</button>
+        </div>
       </div>
       <div class="transport">
         <button id="play" class="btn" title="Pause time">Pause</button>
@@ -26,7 +29,20 @@
       </div>
     </header>
 
-    <main class="workspace">
+    <main id="workspace" class="workspace">
+      <aside id="lesson-pane" class="pane lesson-pane" hidden>
+        <div class="lesson-head">
+          <select id="lesson-select" class="lesson-select" aria-label="Lesson"></select>
+          <div id="ex-dots" class="ex-dots" aria-label="Exercises"></div>
+        </div>
+        <div id="lesson-scroll" class="lesson-scroll"></div>
+        <div class="lesson-foot">
+          <button id="ex-prev" class="btn btn-quiet">← Previous</button>
+          <button id="ex-reset" class="btn btn-quiet" title="Start this exercise over">Reset code</button>
+          <button id="ex-next" class="btn">Next →</button>
+        </div>
+      </aside>
+
       <section class="pane editor-pane">
         <div class="pane-head">
           <span class="file-name">fragment.glsl</span>

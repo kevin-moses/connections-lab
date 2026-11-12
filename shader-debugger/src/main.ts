@@ -7,6 +7,10 @@ import type { TutorHealth } from '../shared/tutor';
 import { DEFAULT_SHADER } from './defaultShader';
 import { Inspector } from './probe/inspector';
 import { Debugger } from './debugger/debugger';
+import { LESSONS } from './lessons/content';
+import { LessonController } from './lessons/lessonView';
+import { loadProgress, saveProgress } from './lessons/progress';
+import { OffscreenRenderer } from './render/offscreen';
 
 const STORAGE_KEY = 'shader-debugger:sandbox:v1';
 const COMPILE_DEBOUNCE_MS = 200;
@@ -30,6 +34,9 @@ const ui = {
   problems: $<HTMLUListElement>('problems'),
   problemCount: $('problem-count'),
   inspect: $<HTMLButtonElement>('inspect'),
+  workspace: $('workspace'),
+  modeSwitch: $('mode-switch'),
+  lessonPane: $('lesson-pane'),
 };
 
 // ---------- persistence (per-viewer convenience; may be unavailable) ----------
@@ -102,12 +109,15 @@ let compileTimer = 0;
 let cursorTimer = 0;
 let inspector: Inspector | null = null;
 let debug: Debugger | null = null;
+let lessons: LessonController | null = null;
+const progress = loadProgress();
 
 const editor = createEditor(
   ui.editor,
-  loadSource(),
+  '',
   (source) => {
-    saveSource(source);
+    if (progress.mode === 'lessons' && lessons) lessons.saveCode(source);
+    else saveSource(source);
     clearTimeout(compileTimer);
     compileTimer = window.setTimeout(() => compile(source), COMPILE_DEBOUNCE_MS);
   },
@@ -157,9 +167,79 @@ if (runner) {
     canvas: ui.canvas,
     canvasWrap: ui.canvas.parentElement!,
   });
+  lessons = new LessonController({
+    lessons: LESSONS,
+    progress,
+    runner,
+    debug,
+    renderer: new OffscreenRenderer(),
+    ui: {
+      pane: ui.lessonPane,
+      select: $<HTMLSelectElement>('lesson-select'),
+      dots: $('ex-dots'),
+      scroll: $('lesson-scroll'),
+      prev: $<HTMLButtonElement>('ex-prev'),
+      next: $<HTMLButtonElement>('ex-next'),
+      reset: $<HTMLButtonElement>('ex-reset'),
+    },
+    loadCode,
+  });
 } else {
   ui.inspect.disabled = true;
+  progress.mode = 'sandbox';
 }
+
+/** Replace the editor's code (fresh undo history) and compile right away. */
+function loadCode(code: string) {
+  clearTimeout(compileTimer);
+  editor.replaceDocument(code);
+  compile(code);
+  fitCanvas();
+}
+
+// ---------- modes ----------
+
+function setMode(mode: 'lessons' | 'sandbox') {
+  progress.mode = mode;
+  saveProgress(progress);
+  const isLessons = mode === 'lessons' && !!lessons;
+  ui.lessonPane.hidden = !isLessons;
+  ui.workspace.classList.toggle('with-lesson', isLessons);
+  ui.resetCode.hidden = isLessons;
+  for (const b of ui.modeSwitch.querySelectorAll<HTMLButtonElement>('button')) {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  }
+  if (isLessons) {
+    lessons!.open(lessons!.current.id);
+  } else {
+    runner?.setFixedSize(null);
+    debug?.close();
+    loadCode(loadSource());
+  }
+}
+
+ui.modeSwitch.addEventListener('click', (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]');
+  if (b && b.dataset.mode !== progress.mode) setMode(b.dataset.mode as 'lessons' | 'sandbox');
+});
+
+/** Lessons use an exact canvas size; letterbox it into the available space. */
+function fitCanvas() {
+  const size = runner?.fixed;
+  const canvas = ui.canvas;
+  if (!size) {
+    canvas.classList.remove('fixed');
+    canvas.style.width = canvas.style.height = '';
+    return;
+  }
+  const wrap = canvas.parentElement!;
+  const pad = 28;
+  const scale = Math.min((wrap.clientWidth - pad) / size[0], (wrap.clientHeight - pad) / size[1]);
+  canvas.classList.add('fixed');
+  canvas.style.width = `${Math.max(1, size[0] * scale)}px`;
+  canvas.style.height = `${Math.max(1, size[1] * scale)}px`;
+}
+new ResizeObserver(fitCanvas).observe(ui.canvas.parentElement!);
 
 function compile(source: string) {
   const parsed = parseGlsl(source);
@@ -190,14 +270,16 @@ function compile(source: string) {
   debug?.setSource(parsed.ok ? parsed.ast : null, result.ok);
   // New errors while not debugging: bring the Problems tab forward.
   if (!result.ok && !debug?.active) debug?.showTab('problems');
+  if (progress.mode === 'lessons') lessons?.onCompiled(source, parsed.ok && result.ok ? parsed.ast : null);
 }
 
-compile(editor.getSource());
+setMode(progress.mode);
 
 if (runner) {
   const r = runner;
   let lastReadout = 0;
   r.onFrame = (info) => {
+    lessons?.onFrame();
     const now = performance.now();
     if (now - lastReadout < 100) return;
     lastReadout = now;
@@ -228,3 +310,8 @@ fetch('/api/health')
     setPill(ui.statusTutor, `Tutor: ${h.provider}`, h.live ? 'ok' : 'idle', h.live ? 'Tutor connected' : 'Proxy up; model not connected until M4'),
   )
   .catch(() => setPill(ui.statusTutor, 'Tutor offline', 'warn', 'Start the API with `npm run dev`'));
+
+// Dev-only handle for poking at the app from the browser console / tests.
+if (import.meta.env.DEV) {
+  (window as unknown as { __sd: unknown }).__sd = { editor, lessons, runner, debug, progress };
+}

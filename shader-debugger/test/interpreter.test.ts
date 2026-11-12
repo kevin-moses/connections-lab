@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGlsl } from '../src/glsl/parse';
-import { traceFragment, type TraceInputs } from '../src/interp/interpreter';
+import { traceCall, traceFragment, type TraceInputs } from '../src/interp/interpreter';
 import { DEFAULT_SHADER } from '../src/defaultShader';
 
 const f = Math.fround;
@@ -224,5 +224,52 @@ void main() {
     const r = run('uniform sampler2D tex;\nvoid main() {\n  fragColor = texture(tex, vec2(0.5));\n}');
     expect(r.error?.message).toMatch(/texture\(\) yet/);
     expect(r.error?.line).toBe(8);
+  });
+});
+
+describe('traceCall', () => {
+  const SRC = `precision highp float;
+uniform float u_time;
+out vec4 fragColor;
+float rect(vec2 uv, vec2 lo, vec2 hi) {
+  vec2 s = step(lo, uv) * (1.0 - step(hi, uv));
+  return s.x * s.y;
+}
+void main() { fragColor = vec4(rect(gl_FragCoord.xy, vec2(0.0), vec2(1.0))); }`;
+  const ast = () => {
+    const p = parseGlsl(SRC);
+    if (!p.ok) throw new Error(p.diagnostic.message);
+    return p.ast;
+  };
+
+  it('evaluates a call to a learner function and records its steps', () => {
+    const r = traceCall(ast(), 'rect(vec2(0.5), vec2(0.2), vec2(0.8))', { pixel: [0, 0], uniforms: {} });
+    expect(r.error).toBeNull();
+    expect(r.output?.value.data).toEqual([1]);
+    expect(r.steps.map((s) => s.kind)).toEqual(['call', 'statement', 'return', 'end']);
+    expect(r.steps[0].depth).toBe(1);
+    expect(r.steps.at(-1)?.text).toBe('rect(vec2(0.5), vec2(0.2), vec2(0.8)) = 1');
+  });
+
+  it('reports unknown functions and bad expressions', () => {
+    expect(traceCall(ast(), 'circle(vec2(0.0), 1.0)', { pixel: [0, 0], uniforms: {} }).error?.message).toMatch(/Unknown function circle/);
+    expect(traceCall(ast(), 'rect(', { pixel: [0, 0], uniforms: {} }).error?.message).toMatch(/Can't parse/);
+  });
+
+  it('evaluates a final expression in main()\'s scope', () => {
+    const p = parseGlsl('precision highp float;\nout vec4 fragColor;\nvoid main() { vec3 a = vec3(0.0); vec3 b = vec3(1.0, 2.0, 3.0); fragColor = vec4(a, 1.0); }');
+    if (!p.ok) throw new Error('parse');
+    const r = traceFragment(p.ast, { pixel: [0, 0], uniforms: {} }, { finalExpression: 'mix(a, b, 0.25).g' });
+    expect((r.finalValue as { data: number[] }).data).toEqual([0.5]);
+    const bad = traceFragment(p.ast, { pixel: [0, 0], uniforms: {} }, { finalExpression: 'nope' });
+    expect(bad.finalError).toMatch(/Unknown variable nope/);
+  });
+
+  it('can skip recording for speed but still enforce the step cap', () => {
+    const r = traceFragment(ast(), { pixel: [0, 0], uniforms: {} }, { record: false });
+    expect(r.steps).toEqual([]);
+    expect(r.output?.value.data).toEqual([1, 1, 1, 1]);
+    const capped = traceFragment(ast(), { pixel: [0, 0], uniforms: {} }, { record: false, maxSteps: 1 });
+    expect(capped.truncated).toBe(true);
   });
 });

@@ -1,0 +1,58 @@
+{
+  "title": "Soft edges with smoothstep",
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "The center is white",
+      "at": [
+        0.5,
+        0.5
+      ],
+      "expect": [
+        1,
+        1,
+        1
+      ],
+      "tol": 0.02
+    },
+    {
+      "type": "pixel",
+      "label": "On the edge (d \u2248 0.3) the value is about halfway",
+      "at": [
+        0.8,
+        0.5
+      ],
+      "expect": [
+        0.43,
+        null,
+        null
+      ],
+      "tol": 0.08
+    },
+    {
+      "type": "pixel",
+      "label": "Well outside the circle is black",
+      "at": [
+        0.95,
+        0.5
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.02
+    }
+  ],
+  "predict": {
+    "question": "`smoothstep(0.25, 0.35, x)` ramps from 0 (at 0.25) to 1 (at 0.35). What does it return at **x = 0.3**, exactly halfway?",
+    "at": [
+      0.5,
+      0.5
+    ],
+    "expr": "smoothstep(0.25, 0.35, 0.3)",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**0.5.** smoothstep is S-shaped, so it eases in and out at the ends, but it's exactly 0.5 in the middle. Step through any pixel near the circle's edge to see its inputs and output."
+  }
+}

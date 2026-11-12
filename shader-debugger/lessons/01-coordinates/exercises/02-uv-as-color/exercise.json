@@ -1,0 +1,77 @@
+{
+  "title": "uv as color",
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "Top-left is black, like p5's origin",
+      "at": [
+        0.02,
+        0.98
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.06
+    },
+    {
+      "type": "pixel",
+      "label": "Bottom-left is green",
+      "at": [
+        0.02,
+        0.02
+      ],
+      "expect": [
+        0,
+        1,
+        0
+      ],
+      "tol": 0.06
+    }
+  ],
+  "predict": {
+    "question": "The starter shows `uv` as red (x) and green (y). What color is the **top-left** corner?",
+    "at": [
+      0.02,
+      0.98
+    ],
+    "expr": "fragColor.rgb",
+    "kind": "choice",
+    "choices": [
+      {
+        "label": "Black",
+        "value": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "label": "Red",
+        "value": [
+          1,
+          0,
+          0
+        ]
+      },
+      {
+        "label": "Green",
+        "value": [
+          0,
+          1,
+          0
+        ]
+      },
+      {
+        "label": "Yellow",
+        "value": [
+          1,
+          1,
+          0
+        ]
+      }
+    ],
+    "explain": "In a shader, y = 0 is the **bottom** row, so the top-left corner has uv \u2248 (0, 1): no red, full green. p5 puts (0, 0) at the top-left, so this trips up a lot of people."
+  }
+}

@@ -23,7 +23,8 @@
     "@lezer/highlight": "^1.2.5",
     "@shaderfrog/glsl-parser": "^7.0.1",
     "codemirror": "^6.0.2",
-    "express": "^5.3.0"
+    "express": "^5.3.0",
+    "marked": "^18.2.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

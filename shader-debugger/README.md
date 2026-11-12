@@ -50,6 +50,18 @@ Interpreter (`src/interp/`): GLSL ES 3.00 values with float32 rounding, all oper
 
 Not yet in the stepper: textures (`texture()`), derivatives (`dFdx`/`fwidth`), structs, `switch`, function-like macros. It tells you plainly when it hits one.
 
+## Status: M3 (lessons) ✅
+
+The app opens in **Lessons** mode (switch to **Sandbox** in the top bar for free play; each mode keeps its own code).
+
+- **Lessons 1–3, 14 exercises:** coordinates & uv (red ramp, uv as color with p5's flipped y, centering, aspect ratio), color (p5 colors, swizzles, `mix`, out-of-range values, `u_time`), and step & thresholds (hard edges, bands, rectangles, a `rect()` function, `smoothstep`).
+- Each exercise has a prompt written for p5 users, a **predict-then-reveal** question (answer it, then the stepper opens on that exact pixel), a live **target preview**, and a **live checklist** that re-runs as you type.
+- Checks: an **image diff** against the hidden reference under several setups (canvas sizes, times, mouse positions), with yours / target / red-difference thumbnails when it fails; **pixel**, **region** and **increasing** probes; and **function tests** that call your GLSL function on the CPU, each with **Step into this call**.
+- Lesson canvases have an exact pixel size (e.g. 400×400, 600×300), so "the pixel at x = 100" means what it says.
+- Progress (code, passed, predictions) is saved in localStorage.
+
+Lesson files live in `lessons/<NN-lesson>/exercises/<NN-exercise>/` (`exercise.json`, `prompt.md`, `starter.glsl`, `reference.glsl`, `notes.md` for the M4 tutor). `test/lessons.test.ts` renders every exercise on the CPU interpreter and asserts: the reference passes every check, the starter fails at least one, and each prediction's explanation matches what the code really does. Add a lesson by adding a folder; the tests cover it automatically.
+
 ## Layout
 
 ```
@@ -60,6 +72,9 @@ src/render/              runner (WebGL2 loop) + gl helpers
 src/probe/               value-as-image: target, rewrite, probeLayer, visualize, inspector (UI)
 src/interp/              CPU interpreter: values, ops, builtins, interpreter (trace), crossCheck, corpus
 src/debugger/            stepper UI: navigation (step over/out, alignment), debugger (panel + editor)
+src/lessons/             types, loader/content, checker, cpuRender, predict, progress, lessonView (pane)
+src/render/offscreen.ts  small GPU renderer for checks and the target preview
+lessons/                 lesson content (markdown, JSON, GLSL)
 selftest.html            GPU vs interpreter agreement report
 src/editor/              CodeMirror setup + GLSL language
 test/                    vitest

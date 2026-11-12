@@ -1,0 +1,60 @@
+{
+  "title": "A red ramp",
+  "variants": [
+    {
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "size": [
+        96,
+        48
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "Left edge is black",
+      "at": [
+        0.01,
+        0.5
+      ],
+      "expect": [
+        0,
+        null,
+        null,
+        null
+      ],
+      "tol": 0.05
+    },
+    {
+      "type": "pixel",
+      "label": "Right edge is full red",
+      "at": [
+        0.99,
+        0.5
+      ],
+      "expect": [
+        1,
+        null,
+        null,
+        null
+      ],
+      "tol": 0.05
+    }
+  ],
+  "predict": {
+    "question": "Before you change anything: the pixel at **x = 100**, a quarter of the way across this 400-pixel canvas. What will its **red** value be (0 to 1)?",
+    "at": [
+      0.25,
+      0.5
+    ],
+    "expr": "fragColor.r",
+    "kind": "number",
+    "tolerance": 0.02,
+    "explain": "`gl_FragCoord.x` is **100.5** there: pixel centers sit on half-pixels. So red = 100.5 / 400 \u2248 0.25. Step through it to watch `red` get computed."
+  }
+}

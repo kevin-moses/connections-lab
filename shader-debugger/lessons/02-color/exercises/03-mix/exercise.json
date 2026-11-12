@@ -1,0 +1,52 @@
+{
+  "title": "Blending with mix",
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "Left edge is the deep blue",
+      "at": [
+        0.005,
+        0.5
+      ],
+      "expect": [
+        0.1,
+        0.2,
+        0.6
+      ],
+      "tol": 0.03
+    },
+    {
+      "type": "pixel",
+      "label": "Right edge is the warm orange",
+      "at": [
+        0.995,
+        0.5
+      ],
+      "expect": [
+        1.0,
+        0.6,
+        0.2
+      ],
+      "tol": 0.03
+    },
+    {
+      "type": "increasing",
+      "label": "Red rises smoothly from left to right",
+      "channel": "r",
+      "axis": "x",
+      "at": 0.5,
+      "rise": 0.8
+    }
+  ],
+  "predict": {
+    "question": "`mix(a, b, t)` goes from a (t = 0) to b (t = 1). What is the **red** value of `mix(left, right, 0.25)`?",
+    "at": [
+      0.5,
+      0.5
+    ],
+    "expr": "mix(left, right, 0.25).r",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "mix is `a + (b \u2212 a) \u00d7 t`: 0.1 + (1.0 \u2212 0.1) \u00d7 0.25 = **0.325**. A quarter of the way from left's red to right's."
+  }
+}

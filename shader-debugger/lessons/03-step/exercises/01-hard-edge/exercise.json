@@ -1,0 +1,74 @@
+{
+  "title": "A hard edge",
+  "variants": [
+    {
+      "size": [
+        64,
+        64
+      ],
+      "mouse": [
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "mouse": [
+        0.7,
+        0.3
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "With the mouse at 25% across, a pixel at 40% is white",
+      "at": [
+        0.4,
+        0.5
+      ],
+      "expect": [
+        1,
+        1,
+        1
+      ],
+      "tol": 0.02,
+      "variant": {
+        "mouse": [
+          0.25,
+          0.5
+        ]
+      }
+    },
+    {
+      "type": "pixel",
+      "label": "With the mouse at 70% across, a pixel at 60% is black",
+      "at": [
+        0.6,
+        0.5
+      ],
+      "expect": [
+        0,
+        0,
+        0
+      ],
+      "tol": 0.02,
+      "variant": {
+        "mouse": [
+          0.7,
+          0.3
+        ]
+      }
+    }
+  ],
+  "predict": {
+    "question": "`step(0.5, uv.x)` is 0 or 1. What is **`s`** at the pixel a quarter of the way across?",
+    "at": [
+      0.25,
+      0.5
+    ],
+    "expr": "s",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "uv.x \u2248 0.25 is below the edge 0.5, so step returns **0**. There's no in-between: just 0 or 1."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "title": "Animate with time",
+  "animated": true,
+  "variants": [
+    {
+      "size": [
+        16,
+        16
+      ],
+      "time": 0.0
+    },
+    {
+      "time": 1.0
+    },
+    {
+      "time": 2.5
+    },
+    {
+      "time": 4.0
+    },
+    {
+      "time": 5.5
+    }
+  ],
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "At u_time = 4 the red is dim but not black",
+      "at": [
+        0.5,
+        0.5
+      ],
+      "expect": [
+        0.121,
+        null,
+        null
+      ],
+      "tol": 0.02,
+      "variant": {
+        "time": 4.0
+      }
+    }
+  ],
+  "predict": {
+    "question": "At **u_time = 4 seconds**, `sin(4.0)` \u2248 \u22120.76. What will the **red** value on screen be?",
+    "at": [
+      0.5,
+      0.5
+    ],
+    "expr": "clamp(pulse, 0.0, 1.0)",
+    "kind": "number",
+    "tolerance": 0.02,
+    "time": 4.0,
+    "explain": "**0.** sin spends half its time below zero, and the screen clamps all of it to black. That's why the starter sits dark for about 3 seconds out of every 6.3."
+  }
+}

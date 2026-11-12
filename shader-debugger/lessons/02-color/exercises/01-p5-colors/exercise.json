@@ -1,0 +1,73 @@
+{
+  "title": "p5 colors in a shader",
+  "variants": [
+    {
+      "size": [
+        16,
+        16
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "The canvas is p5's orange, fill(255, 128, 0)",
+      "at": [
+        0.5,
+        0.5
+      ],
+      "expect": [
+        1,
+        0.502,
+        0,
+        1
+      ],
+      "tol": 0.01
+    }
+  ],
+  "predict": {
+    "question": "The starter plugs in p5's numbers directly: `vec4(255.0, 128.0, 0.0, 1.0)`. What color will the canvas be?",
+    "at": [
+      0.5,
+      0.5
+    ],
+    "expr": "fragColor.rgb",
+    "kind": "choice",
+    "clamp": true,
+    "choices": [
+      {
+        "label": "Orange",
+        "value": [
+          1,
+          0.5,
+          0
+        ]
+      },
+      {
+        "label": "Yellow",
+        "value": [
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "label": "White",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "label": "Black",
+        "value": [
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "explain": "**Yellow.** 255 and 128 are both far above 1, so red and green clamp to 1.0 and blue stays 0. Red plus green light is yellow."
+  }
+}

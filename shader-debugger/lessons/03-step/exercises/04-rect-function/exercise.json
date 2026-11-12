@@ -1,0 +1,71 @@
+{
+  "title": "Your first function",
+  "tests": [
+    {
+      "type": "call",
+      "label": "A point in the middle of the box is inside",
+      "call": "rect(vec2(0.5), vec2(0.2), vec2(0.8))",
+      "expect": 1
+    },
+    {
+      "type": "call",
+      "label": "Left of the box is outside",
+      "call": "rect(vec2(0.1, 0.5), vec2(0.2), vec2(0.8))",
+      "expect": 0
+    },
+    {
+      "type": "call",
+      "label": "Above the box is outside",
+      "call": "rect(vec2(0.5, 0.9), vec2(0.2), vec2(0.8))",
+      "expect": 0
+    },
+    {
+      "type": "call",
+      "label": "The bottom-left corner counts as inside (step is 1 exactly at the edge)",
+      "call": "rect(vec2(0.2, 0.2), vec2(0.2), vec2(0.8))",
+      "expect": 1
+    },
+    {
+      "type": "call",
+      "label": "Works for boxes that aren't square",
+      "call": "rect(vec2(0.6, 0.15), vec2(0.5, 0.1), vec2(0.9, 0.2))",
+      "expect": 1
+    }
+  ],
+  "predict": {
+    "question": "The starter's `rect()` always returns 0.0. What color is the pixel at **(0.25, 0.25)**, inside where the first box should be?",
+    "at": [
+      0.25,
+      0.25
+    ],
+    "expr": "fragColor.rgb",
+    "kind": "choice",
+    "choices": [
+      {
+        "label": "Black",
+        "value": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "label": "White",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "label": "Gray",
+        "value": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
+    ],
+    "explain": "**Black**: 0 + 0 = 0. Click that pixel and step into each `rect()` call to watch it return 0 both times."
+  }
+}

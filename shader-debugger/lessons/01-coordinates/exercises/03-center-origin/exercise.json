@@ -1,0 +1,58 @@
+{
+  "title": "Center the origin",
+  "tests": [
+    {
+      "type": "pixel",
+      "label": "The center is black",
+      "at": [
+        0.5,
+        0.5
+      ],
+      "expect": [
+        0,
+        0,
+        null
+      ],
+      "tol": 0.06
+    },
+    {
+      "type": "pixel",
+      "label": "The bottom-left corner is yellow: abs() turned the negatives positive",
+      "at": [
+        0.02,
+        0.02
+      ],
+      "expect": [
+        1,
+        1,
+        null
+      ],
+      "tol": 0.08
+    },
+    {
+      "type": "pixel",
+      "label": "The top-right corner is yellow too",
+      "at": [
+        0.98,
+        0.98
+      ],
+      "expect": [
+        1,
+        1,
+        null
+      ],
+      "tol": 0.08
+    }
+  ],
+  "predict": {
+    "question": "Once you write `uv = uv * 2.0 - 1.0`, what will **`uv.x`** be at the **left edge** of the canvas?",
+    "at": [
+      0.0,
+      0.5
+    ],
+    "expr": "uv.x * 2.0 - 1.0",
+    "kind": "number",
+    "tolerance": 0.02,
+    "explain": "At the left edge uv.x \u2248 0, and 0 \u00d7 2 \u2212 1 = **\u22121**. The center (0.5) maps to 0, and the right edge to +1. Three quarters of the canvas ends up with at least one negative component."
+  }
+}
