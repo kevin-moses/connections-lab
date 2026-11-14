@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { cursorToLine, lessonFile, mockTutor, openExercise, setCode } from './helpers';
 
 test.beforeEach(async ({ page }) => {
@@ -212,4 +212,75 @@ test("language dropdown: code that can't be converted keeps its language, and sa
   await page.locator('#style-select').selectOption('shadertoy');
   await expect.poll(() => message).toContain("Can't switch styles");
   await expect(page.locator('#style-select')).toHaveValue('es300');
+});
+
+/** Click vertex `i` of the mesh on screen (positions straight from the GPU). */
+async function clickVertex(page: Page, i: number, modifiers: ('Shift')[] = []) {
+  const at = await page.evaluate((i) => {
+    const sd = window.__sd as unknown as {
+      mesh: { scene: { screenPosition(i: number, u: unknown): [number, number] | null } };
+      runner: { currentUniforms(): unknown };
+    };
+    const canvas = document.querySelector<HTMLCanvasElement>('#view')!;
+    const p = sd.mesh.scene.screenPosition(i, sd.runner.currentUniforms())!;
+    const r = canvas.getBoundingClientRect();
+    return { x: r.left + (p[0] / canvas.width) * r.width, y: r.bottom - (p[1] / canvas.height) * r.height };
+  }, i);
+  await page.mouse.move(at.x, at.y);
+  for (const m of modifiers) await page.keyboard.down(m);
+  await page.mouse.down();
+  await page.mouse.up();
+  for (const m of modifiers) await page.keyboard.up(m);
+}
+
+test('3D mesh: two files, click a vertex to step its vertex shader, and the GPU agrees', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#mode-switch [data-mode="sandbox"]').click();
+  await page.locator('#view-switch [data-view="mesh"]').click();
+  await expect(page.locator('#status-compile')).toHaveText(/GPU ✓/);
+  await expect(page.locator('#file-tabs')).toBeVisible();
+  const code = () => page.evaluate(() => window.__sd.editor.view.state.doc.toString());
+  expect(await code()).toContain('in vec3 aPosition;');
+  // Paused, so the wave holds still between picking and checking.
+  await page.locator('#play').click();
+
+  // The plane's centre vertex: row 12, column 12 of a 25 × 25 grid.
+  await clickVertex(page, 12 * 25 + 12);
+  await expect(page.locator('#dbg-pixels')).toContainText('A vertex 312');
+  await expect(page.locator('#dbg-check')).toHaveText('GPU ✓ agrees');
+  await expect(page.locator('.cm-inline-value').first()).toBeVisible();
+
+  // Compare with a second vertex.
+  await clickVertex(page, 0, ['Shift']);
+  await expect(page.locator('#dbg-pixels')).toContainText('B vertex 0');
+  await expect(page.locator('#dbg-check')).toHaveText('GPU ✓ agrees');
+
+  // The fragment file is its own tab; its errors are labelled with its name.
+  await page.locator('#file-tabs [data-file="fragment"]').click();
+  expect(await code()).toContain('out vec4 fragColor;');
+  await expect(page.locator('.cm-inline-value')).toHaveCount(0); // vertex highlights stay in the vertex file
+  await setCode(page, (await code()).replace('fragColor = vec4(base * light, 1.0);', 'fragColor = vec4(base * light, 1.0)'));
+  await expect(page.locator('#problems')).toContainText('fragment.glsl Ln');
+  await page.locator('#file-tabs [data-file="vertex"]').click();
+  expect(await code()).toContain('in vec3 aPosition;');
+
+  // Fix it, and try the sphere.
+  await page.locator('#file-tabs [data-file="fragment"]').click();
+  await setCode(page, (await code()).replace('fragColor = vec4(base * light, 1.0)\n', 'fragColor = vec4(base * light, 1.0);\n'));
+  await expect(page.locator('#status-compile')).toHaveText(/GPU ✓/);
+  await page.locator('#mesh-select').selectOption('sphere');
+  // A vertex on the front of the sphere (row 8 of 16 = the equator, column 0 faces +z).
+  await clickVertex(page, 8 * 25 + 0);
+  await expect(page.locator('#dbg-check')).toHaveText('GPU ✓ agrees');
+
+  // The 3D view and the mesh are remembered.
+  await page.reload();
+  await expect(page.locator('#view-switch .active')).toHaveText('3D mesh');
+  await expect(page.locator('#mesh-select')).toHaveValue('sphere');
+
+  // Back to 2D: the canvas sandbox code is still there.
+  await page.locator('#view-switch [data-view="canvas"]').click();
+  await expect(page.locator('#file-tabs')).toBeHidden();
+  expect(await code()).not.toContain('aPosition');
+  await expect(page.locator('#status-compile')).toHaveText(/GPU ✓/);
 });

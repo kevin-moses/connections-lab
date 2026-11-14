@@ -155,3 +155,34 @@ function firstCodeLine(lines: string[], from: number): number | null {
 export function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, ' '));
 }
+
+/** ES 1.00 vertex names that ES 3.00 spells differently (as three.js maps them). */
+const ES100_VERTEX_DEFINES = ['#define attribute in', '#define varying out', '#define texture2D texture'];
+
+/**
+ * A vertex shader for WebGL2: ES 3.00 gets `#version` if it's missing; ES
+ * 1.00 (p5 style: `attribute`, `varying`) gets the same treatment as
+ * three.js gives it, on lines of their own, mapped back to the learner's.
+ */
+export function prepareVertexSource(source: string): PreparedShader {
+  const lines = countLines(source);
+  const trivia = LEADING_TRIVIA.exec(source)?.[0] ?? '';
+  const version = VERSION_DIRECTIVE.exec(source.slice(trivia.length));
+  const code = stripComments(source);
+  const es100 = version ? version[1] === '100' : /\b(?:attribute|varying)\b/.test(code);
+  if (!es100) {
+    if (version) return { code: source, map: LineMap.identity(lines), style: 'es300', injectedVersion: false };
+    return { code: `#version 300 es\n${source}`, map: LineMap.withPrefix(1, lines), style: 'es300', injectedVersion: true };
+  }
+  const srcLines = source.split('\n');
+  const versionLine = version ? countLines(trivia) : 0;
+  const head = srcLines.slice(0, versionLine).map((l, i) => (i === versionLine - 1 ? l.replace(VERSION_DIRECTIVE, '#version 300 es') : l));
+  const out = [...head, ...(versionLine ? [] : ['#version 300 es']), ...ES100_VERTEX_DEFINES, ...srcLines.slice(versionLine)];
+  const genToSrc = [
+    ...head.map((_, i) => i + 1),
+    ...(versionLine ? [] : [null]),
+    ...ES100_VERTEX_DEFINES.map(() => null),
+    ...srcLines.slice(versionLine).map((_, i) => versionLine + i + 1),
+  ];
+  return { code: out.join('\n'), map: new LineMap(genToSrc), style: 'es100', injectedVersion: !versionLine };
+}

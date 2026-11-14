@@ -40,6 +40,15 @@ export interface Overlay {
 }
 
 /**
+ * Something that draws its own picture instead of the full-screen shader
+ * (the 3D mesh view). Plugged in from outside, like the overlay.
+ */
+export interface Scene {
+  readonly active: boolean;
+  render(width: number, height: number, uniforms: CanonicalUniforms): void;
+}
+
+/**
  * Runs a fragment shader over a full-screen triangle with the canonical
  * uniforms (u_resolution, u_time, u_mouse). A failed compile keeps the last
  * working program on screen. While an overlay is active, it draws instead.
@@ -48,6 +57,7 @@ export class ShaderRunner {
   readonly gl: WebGL2RenderingContext;
   readonly pass: FullscreenPass;
   overlay: Overlay | null = null;
+  scene: Scene | null = null;
   /** After each frame is drawn. */
   readonly frame = new Emitter<FrameInfo>();
   private program: WebGLProgram | null = null;
@@ -73,7 +83,7 @@ export class ShaderRunner {
     private readonly canvas: HTMLCanvasElement,
     private fixedSize: [number, number] | null = null,
   ) {
-    const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+    const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false, depth: true });
     if (!gl) throw new Error('WebGL2 is not available in this browser.');
     this.gl = gl;
 
@@ -223,6 +233,10 @@ export class ShaderRunner {
 
     if (this.overlay?.active) {
       this.overlay.render(width, height, this.uniforms(), this.playing);
+      return;
+    }
+    if (this.scene?.active) {
+      this.scene.render(width, height, this.uniforms());
       return;
     }
 

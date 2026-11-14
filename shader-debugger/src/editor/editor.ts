@@ -198,6 +198,10 @@ export interface ShaderEditor {
   revealLine(line: number): void;
   /** Swap in new code with a fresh undo history (e.g. switching exercises). */
   replaceDocument(doc: string): void;
+  /** A document of its own (undo history, cursor) for another file tab. */
+  createState(doc: string): EditorState;
+  /** Show another tab's state; returns the one it replaces, to keep for later. */
+  swapState(state: EditorState): EditorState;
 }
 
 export function createEditor(
@@ -240,6 +244,12 @@ export function createEditor(
     cursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
     replaceDocument(doc) {
       view.setState(EditorState.create({ doc, extensions }));
+    },
+    createState: (doc) => EditorState.create({ doc, extensions }),
+    swapState(state) {
+      const old = view.state;
+      view.setState(state);
+      return old;
     },
     revealLine(line) {
       const doc = view.state.doc;

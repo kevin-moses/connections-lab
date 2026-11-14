@@ -119,6 +119,16 @@ export function traceFragment(ast: Program, inputs: TraceInputs, options: TraceO
   return new Interpreter(ast, inputs, options).run(null);
 }
 
+/** Run a vertex shader for one vertex on the CPU and record every step. The output is gl_Position. */
+export function traceVertex(
+  ast: Program,
+  inputs: { attributes: Record<string, number[]>; vertexId: number; uniforms: Record<string, number | number[]> },
+  options: TraceOptions = {},
+): TraceResult {
+  const { attributes, vertexId, uniforms } = inputs;
+  return new Interpreter(ast, { pixel: [0, 0], uniforms, vertex: { attributes, vertexId } }, options).run(null);
+}
+
 /**
  * Evaluate one expression (usually a call to the learner's function, e.g.
  * `rect(vec2(0.5), vec2(0.2), vec2(0.8))`) with the shader's globals set up,
@@ -248,9 +258,18 @@ class Interpreter {
   private setupGlobals(): void {
     const [px, py] = this.inputs.pixel;
     const g = this.globals.vars;
-    g.set('gl_FragCoord', { value: make(VEC4, [px + 0.5, py + 0.5, 0.5, 1]), isConst: true, kind: 'input' });
-    g.set('gl_FrontFacing', { value: make(BOOL, [1]), isConst: true, kind: 'input' });
-    g.set('gl_PointCoord', { value: make(VEC2, [0, 0]), isConst: true, kind: 'input' });
+    if (this.inputs.vertex) {
+      // Vertex stage: gl_Position is the output; `out` globals are varyings.
+      g.set('gl_VertexID', { value: make(INT, [this.inputs.vertex.vertexId]), isConst: true, kind: 'input' });
+      g.set('gl_InstanceID', { value: make(INT, [0]), isConst: true, kind: 'input' });
+      g.set('gl_Position', { value: zero(VEC4), isConst: false, kind: 'output' });
+      g.set('gl_PointSize', { value: make(FLOAT, [1]), isConst: false, kind: 'output' });
+      this.outputName = 'gl_Position';
+    } else {
+      g.set('gl_FragCoord', { value: make(VEC4, [px + 0.5, py + 0.5, 0.5, 1]), isConst: true, kind: 'input' });
+      g.set('gl_FrontFacing', { value: make(BOOL, [1]), isConst: true, kind: 'input' });
+      g.set('gl_PointCoord', { value: make(VEC2, [0, 0]), isConst: true, kind: 'input' });
+    }
 
     const fnNames = (this.ast.program as AstNode[]).filter((n) => n.type === 'function').map((n) => (n as FunctionNode).prototype.header.name.identifier);
     if (fnNames.includes('mainImage') && !fnNames.includes('main')) this.declareShadertoyInputs();
@@ -269,7 +288,7 @@ class Interpreter {
     }
     this.frames.pop();
 
-    if (!this.outputName && !this.globals.vars.has('gl_FragColor') && !fnNames.includes('mainImage')) {
+    if (!this.inputs.vertex && !this.outputName && !this.globals.vars.has('gl_FragColor') && !fnNames.includes('mainImage')) {
       g.set('gl_FragColor', { value: zero(VEC4), isConst: false, kind: 'output' });
       this.outputName = 'gl_FragColor';
     }
@@ -282,8 +301,10 @@ class Interpreter {
     };
     const quals = (l.specified_type.qualifiers ?? []).map((q) => q.token ?? q.type);
     const isUniform = quals.includes('uniform');
-    const isOut = quals.includes('out');
-    const isIn = quals.includes('in') || quals.includes('varying') || quals.includes('attribute');
+    // ES 1.00's `varying` is an output in a vertex shader and an input in a fragment shader.
+    const vertex = !!this.inputs.vertex;
+    const isOut = quals.includes('out') || (vertex && quals.includes('varying'));
+    const isIn = quals.includes('in') || quals.includes('attribute') || (!vertex && quals.includes('varying'));
     const isConst = quals.includes('const');
 
     for (const d of l.declarations) {
@@ -292,7 +313,7 @@ class Interpreter {
       const t = this.declType(l.specified_type.specifier, decl.quantifier);
       let value: AnyValue;
       if (isUniform) value = this.uniformValue(name, t);
-      else if (isIn) value = this.varyingValue(name, t);
+      else if (isIn) value = this.inputs.vertex ? this.attributeValue(name, t) : this.varyingValue(name, t);
       else if (decl.initializer) value = this.coerce(this.evaluate(decl.initializer), t);
       else value = this.zeroOf(t);
       const kind: Binding['kind'] = isUniform ? 'uniform' : isOut ? 'output' : isIn ? 'input' : 'global';
@@ -316,6 +337,14 @@ class Interpreter {
       return make(t, name === 'vUv' ? [u, v] : [u, 1 - v]);
     }
     return zero(t);
+  }
+
+  /** A vertex attribute; one the mesh doesn't have reads as (0, 0, 0, 1), like the GPU's default. */
+  private attributeValue(name: string, t: Type | ArrayDecl): AnyValue {
+    if ('length' in t) return zeroArray(t.elem, t.length);
+    const raw = this.inputs.vertex!.attributes[name] ?? [];
+    const n = t.rows * t.cols;
+    return make(t, Array.from({ length: n }, (_, i) => raw[i] ?? (i === 3 ? 1 : 0)));
   }
 
   private uniformValue(name: string, t: Type | ArrayDecl): AnyValue {

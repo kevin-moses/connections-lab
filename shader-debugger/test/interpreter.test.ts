@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGlsl } from '../src/glsl/parse';
-import { traceCall, traceFragment, type TraceInputs } from '../src/interp/interpreter';
+import { traceCall, traceFragment, traceVertex, type TraceInputs } from '../src/interp/interpreter';
 import { DEFAULT_SHADER } from '../src/defaultShader';
 
 const f = Math.fround;
@@ -325,5 +325,47 @@ describe('Shadertoy shaders', () => {
     if (!parsed.ok) throw new Error(parsed.diagnostic.message);
     const r = traceFragment(parsed.ast, { pixel: [0, 0], uniforms: { u_resolution: [4, 4] } });
     expect(r.error?.message).toMatch(/can't run texture\(\) yet/);
+  });
+});
+
+describe('vertex shaders', () => {
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  // Translate by (0, 0, -2), column-major like WebGL.
+  const modelView = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -2, 1];
+  const vs = `precision highp float;
+in vec3 aPosition;
+in vec2 aTexCoord;
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform float u_time;
+out vec2 vTexCoord;
+void main() {
+  vec3 pos = aPosition;
+  pos.z += 0.5 * u_time;
+  vTexCoord = aTexCoord;
+  gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(pos, 1.0);
+}`;
+  it('reads attributes, writes gl_Position and varyings', () => {
+    const parsed = parseGlsl(vs);
+    if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+    const r = traceVertex(parsed.ast, {
+      attributes: { aPosition: [0.25, -0.5, 0], aTexCoord: [0.75, 1] },
+      vertexId: 7,
+      uniforms: { uModelViewMatrix: modelView, uProjectionMatrix: identity, u_time: 1 },
+    });
+    expect(r.error).toBeNull();
+    expect(r.output?.name).toBe('gl_Position');
+    expect((r.output!.value as { data: number[] }).data).toEqual([0.25, -0.5, -1.5, 1]);
+    const last = r.steps.at(-1)!;
+    expect(last.globals.find((v) => v.name === 'vTexCoord')?.value).toMatchObject({ data: [0.75, 1] });
+    expect(r.inputs.map((i) => i.name)).toEqual(expect.arrayContaining(['aPosition', 'aTexCoord', 'gl_VertexID']));
+  });
+
+  it("treats ES 1.00 varyings as outputs, and a missing attribute as the GPU's (0, 0, 0, 1)", () => {
+    const parsed = parseGlsl('attribute vec4 aColor;\nvarying vec4 vColor;\nvoid main() { vColor = aColor; gl_Position = aColor; }');
+    if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+    const r = traceVertex(parsed.ast, { attributes: {}, vertexId: 0, uniforms: {} });
+    expect((r.output!.value as { data: number[] }).data).toEqual([0, 0, 0, 1]);
+    expect(r.steps.at(-1)!.globals.find((v) => v.name === 'vColor')?.value).toMatchObject({ data: [0, 0, 0, 1] });
   });
 });

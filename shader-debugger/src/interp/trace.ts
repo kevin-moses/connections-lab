@@ -6,10 +6,15 @@ import type { AnyValue, Value } from './values';
  */
 
 export interface TraceInputs {
-  /** Pixel coordinates (integers, origin bottom-left); gl_FragCoord gets +0.5. */
+  /** Pixel coordinates (integers, origin bottom-left); gl_FragCoord gets +0.5. Ignored for a vertex. */
   pixel: [number, number];
-  /** Uniform values by name. Missing uniforms are 0, like the GPU's default. */
+  /** Uniform values by name (matrices column-major, like WebGL). Missing uniforms are 0, like the GPU's default. */
   uniforms: Record<string, number | number[]>;
+  /**
+   * Run a vertex shader instead: `in`/`attribute` globals read these values
+   * (by name), and the output is gl_Position. `vertexId` is gl_VertexID.
+   */
+  vertex?: { attributes: Record<string, number[]>; vertexId: number };
 }
 
 export interface TraceOptions {

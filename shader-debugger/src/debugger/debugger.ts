@@ -41,14 +41,22 @@ export interface DebuggerUI {
   canvasWrap: HTMLElement;
 }
 
-/** One traced run: a pixel, or a single function call from a test. */
-interface PixelRun {
+/** One traced run: a pixel, a single function call from a test, or a mesh vertex. */
+export interface PixelRun {
+  /** Where to put the marker, in canvas pixels (origin bottom-left). */
   pixel: [number, number] | null;
   call: string | null;
+  /** A vertex of the mesh (its index), when stepping a vertex shader. */
+  vertex?: number;
   trace: TraceResult;
-  /** GPU comparison; null for function calls (no pixel to compare). */
+  /** GPU comparison; null for function calls (nothing to compare). */
   check: CrossCheck | null;
+  /** Run it again after an edit (vertex runs bring their own). */
+  redo?: () => PixelRun;
 }
+
+/** Takes over clicks on the canvas (mesh mode picks vertices instead of pixels). */
+export type CanvasPick = (canvasPixel: [number, number], which: 'a' | 'b') => void;
 
 const CLICK_SLOP_PX = 4;
 
@@ -65,6 +73,10 @@ export class Debugger {
   private frozen: CanonicalUniforms | null = null;
   private cur = 0;
   private downAt: [number, number] | null = null;
+  /** When set, a click on the canvas goes here instead of picking a pixel. */
+  canvasPick: CanvasPick | null = null;
+  /** When set and false, the editor shows other code than the run's (another tab): no highlights. */
+  showsRunCode: (() => boolean) | null = null;
 
   constructor(
     private readonly runner: ShaderRunner,
@@ -80,7 +92,9 @@ export class Debugger {
       this.downAt = null;
       if (!start || Math.hypot(e.clientX - start[0], e.clientY - start[1]) > CLICK_SLOP_PX) return;
       const [x, y] = runner.toCanvasPixels(e);
-      this.pick([Math.floor(x), Math.floor(y)], e.shiftKey && this.a ? 'b' : 'a');
+      const which = e.shiftKey && this.a ? 'b' : 'a';
+      if (this.canvasPick) this.canvasPick([x, y], which);
+      else this.pick([Math.floor(x), Math.floor(y)], which);
     });
 
     ui.tabDebug.addEventListener('click', () => this.showTab('debug'));
@@ -125,6 +139,11 @@ export class Debugger {
     if (this.a && ast && compiled) this.retrace();
   }
 
+  /** Re-run the current runs (e.g. a vertex after the mesh's shaders were rebuilt), or redraw the editor highlights. */
+  refresh(): void {
+    if (this.a) this.retrace();
+  }
+
   showTab(tab: 'debug' | 'problems'): void {
     const debug = tab === 'debug';
     this.ui.tabDebug.setAttribute('aria-selected', String(debug));
@@ -148,6 +167,24 @@ export class Debugger {
     this.a = this.run(pixel);
     this.b = null;
     this.cur = 0;
+    this.open();
+  }
+
+  /**
+   * Step through a run someone else knows how to make (a mesh vertex).
+   * `make` is called again after every edit, so values follow the code.
+   */
+  stepRun(make: () => PixelRun, which: 'a' | 'b', uniforms: CanonicalUniforms): void {
+    if (which === 'b' && !this.a) which = 'a';
+    if (which === 'a' || !this.frozen) this.frozen = uniforms;
+    const run = { ...make(), redo: make };
+    if (which === 'a') {
+      this.a = run;
+      this.b = null;
+      this.cur = 0;
+    } else {
+      this.b = run;
+    }
     this.open();
   }
 
@@ -204,11 +241,12 @@ export class Debugger {
   }
 
   private rerun(r: PixelRun): PixelRun {
+    if (r.redo) return { ...r.redo(), redo: r.redo };
     return r.call !== null ? this.runCall(r.call) : this.run(r.pixel!);
   }
 
   private retrace(): void {
-    if (!this.a || !this.ast) return;
+    if (!this.a || (!this.ast && !this.a.redo)) return;
     const old = this.a.trace.steps;
     this.a = this.rerun(this.a);
     if (this.b) this.b = this.rerun(this.b);
@@ -286,9 +324,12 @@ export class Debugger {
     const chip = (which: 'a' | 'b', run: PixelRun) => {
       const span = document.createElement('span');
       span.className = `pixel-chip ${which}`;
-      span.innerHTML = run.pixel
-        ? `<span class="dot"></span>${which.toUpperCase()} (${run.pixel[0]}, ${run.pixel[1]})`
-        : `<span class="dot"></span>test: <code>${esc(run.call ?? '')}</code>`;
+      span.innerHTML =
+        run.vertex !== undefined
+          ? `<span class="dot"></span>${which.toUpperCase()} vertex ${run.vertex}`
+          : run.pixel
+            ? `<span class="dot"></span>${which.toUpperCase()} (${run.pixel[0]}, ${run.pixel[1]})`
+            : `<span class="dot"></span>test: <code>${esc(run.call ?? '')}</code>`;
       const x = document.createElement('button');
       x.textContent = '×';
       x.title = which === 'a' ? 'Stop debugging' : 'Stop comparing';
@@ -397,6 +438,10 @@ export class Debugger {
   }
 
   private renderEditor(): void {
+    if (this.showsRunCode && !this.showsRunCode()) {
+      this.editor.showDebug(null);
+      return;
+    }
     const a = this.a!.trace.steps;
     const step = a[this.cur];
     const bInline = this.b ? inlineValuesAligned(a, this.cur, this.b.trace.steps) : null;

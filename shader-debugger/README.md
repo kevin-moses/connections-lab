@@ -107,6 +107,17 @@ Limits:
 
 The facts these choices rest on (p5 2.4.0 and three.js r187 behaviour) are in [docs/decisions/0001](docs/decisions/0001-dialects-keep-display-positions.md).
 
+## Status: Stage 2 (vertex + mesh), first slice ✅
+
+In the sandbox, switch **2D canvas / 3D mesh** in the top bar. Mesh mode draws a vertex shader and a fragment shader on a built-in **plane, sphere or box**:
+- **Two files**, `vertex.glsl` and `fragment.glsl`, as editor tabs. Each keeps its own undo history, and errors are shown per file ("vertex.glsl Ln 12" in Problems).
+- **p5's names**: `aPosition`, `aNormal`, `aTexCoord` in; `uModelViewMatrix`, `uProjectionMatrix`, `uNormalMatrix` from the camera; plus `u_time`, `u_resolution`, `u_mouse`. ES 1.00 code (`attribute`, `varying`) runs too, converted like three.js does.
+- The meshes are unit-sized like p5's (−0.5..0.5), and the plane's texture coordinates follow p5: (0, 0) at the top-left.
+- **Drag to orbit**, scroll to zoom.
+- **Click a vertex to step through the vertex shader for it**, with inline values, the variables panel (attributes, uniforms, `gl_Position` and the varyings), step over/out, and Shift-click to compare two vertices. The **GPU cross-check** reads every vertex's real `gl_Position` back with transform feedback and compares. Picking uses those positions too, so you can click a displaced vertex where it actually is.
+
+Not yet in mesh mode: Inspect values, stepping a fragment on the mesh (that's Stage 3, the rasterizer bridge), the language dropdown, export, and lessons. Those are the next slices.
+
 ## Layout
 
 ```
@@ -117,6 +128,7 @@ src/tutor/               client (fetch + safe markdown), error explainer
 src/glsl/                linemap, prepare (ES 1.00 → 3.00 conversion, version injection), diagnostics (info-log parsing), parse (AST)
 src/dialects/            style conversion (convert: p5, Shadertoy, shared edits), export (p5 sketch, three.js page, Shadertoy)
 src/glsl/shadertoy.ts    Shadertoy's inputs: one table for the GPU header, uniform values and the interpreter
+src/mesh/                3D: geometry (plane, sphere, box), mat4, orbit camera, scene (draw, transform-feedback readback, picking), meshMode (tabs, vertex stepping)
 src/render/              runner (WebGL2 loop, pluggable overlay), fullscreen pass (shared GPU plumbing), gl helpers, render types
 src/probe/               value-as-image: target, rewrite, probeLayer, visualize, inspector (UI)
 src/interp/              CPU interpreter: values, ops, builtins, interpreter, trace (types), astUtil, corpus

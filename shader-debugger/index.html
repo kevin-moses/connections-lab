@@ -15,6 +15,11 @@
           <button data-mode="lessons">Lessons</button>
           <button data-mode="sandbox">Sandbox</button>
         </div>
+        <div id="view-switch" class="seg" role="group" aria-label="View" hidden>
+          <button data-view="canvas" title="A fragment shader on a flat canvas">2D canvas</button>
+          <button data-view="mesh" title="A vertex and a fragment shader on a 3D mesh">3D mesh</button>
+        </div>
+        <select id="mesh-select" class="style-select" aria-label="Mesh" title="Which mesh to draw" hidden></select>
       </div>
       <div class="transport">
         <button id="play" class="btn" title="Pause time">Pause</button>
@@ -45,7 +50,11 @@
 
       <section class="pane editor-pane">
         <div class="pane-head">
-          <span class="file-name">fragment.glsl</span>
+          <span id="file-name" class="file-name">fragment.glsl</span>
+          <div id="file-tabs" class="file-tabs" role="tablist" aria-label="Files" hidden>
+            <button role="tab" data-file="vertex">vertex.glsl</button>
+            <button role="tab" data-file="fragment">fragment.glsl</button>
+          </div>
           <div class="head-actions">
             <select id="style-select" class="style-select" aria-label="Shader language" title="Show the code as GLSL ES 3.00, p5 style (ES 1.00) or a Shadertoy shader. Switching rewrites it.">
               <option value="es300" title="Modern GLSL ES 3.00: out vec4 fragColor, in, texture()">GLSL ES 3.00</option>
@@ -107,7 +116,7 @@
             <button role="tab" class="tab" id="tab-problems" data-tab="problems" aria-selected="true">
               Problems <span id="problem-count" class="count">0</span>
             </button>
-            <span class="tab-hint">Click a pixel to step through it · Shift-click a second to compare</span>
+            <span id="tab-hint" class="tab-hint">Click a pixel to step through it · Shift-click a second to compare</span>
           </div>
 
           <section id="panel-problems" class="tab-panel" role="tabpanel">

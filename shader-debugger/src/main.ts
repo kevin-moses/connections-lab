@@ -16,6 +16,8 @@ import { LESSONS } from './lessons/content';
 import { LessonController } from './lessons/lessonView';
 import { loadProgress, saveProgress } from './lessons/progress';
 import { OffscreenRenderer } from './render/offscreen';
+import { MeshScene } from './mesh/scene';
+import { MeshMode, type MeshReport, type MeshFile } from './mesh/meshMode';
 import { addErrorExplainer } from './tutor/errorExplainer';
 
 const STORAGE_KEY = 'shader-debugger:sandbox:v1';
@@ -41,6 +43,10 @@ const ui = {
   inspect: $<HTMLButtonElement>('inspect'),
   workspace: $('workspace'),
   modeSwitch: $('mode-switch'),
+  viewSwitch: $('view-switch'),
+  meshSelect: $<HTMLSelectElement>('mesh-select'),
+  fileTabs: $('file-tabs'),
+  fileName: $('file-name'),
   lessonPane: $('lesson-pane'),
 };
 
@@ -70,7 +76,10 @@ function setPill(el: HTMLElement, text: string, state: 'ok' | 'warn' | 'error' |
   if (title !== undefined) el.title = title;
 }
 
-function renderProblems(diags: ShaderDiagnostic[], onPick: (line: number) => void) {
+/** A problem, and in mesh mode which file it's in. */
+type Problem = ShaderDiagnostic & { file?: MeshFile };
+
+function renderProblems(diags: Problem[], onPick: (line: number, d: Problem) => void) {
   ui.problems.replaceChildren();
   const errors = diags.filter((d) => d.severity === 'error').length;
   ui.problemCount.textContent = String(diags.length);
@@ -90,12 +99,14 @@ function renderProblems(diags: ShaderDiagnostic[], onPick: (line: number) => voi
     dot.className = `dot ${d.severity}`;
     const where = document.createElement('span');
     where.className = 'where';
-    where.textContent = d.line !== null ? `Ln ${d.line}` : '—';
+    const file = d.file ? `${d.file}.glsl ` : '';
+    where.textContent = d.line !== null ? `${file}Ln ${d.line}` : file || '—';
     const msg = document.createElement('span');
     msg.textContent = d.message;
     li.append(dot, where, msg);
-    if (d.line !== null) li.addEventListener('click', () => onPick(d.line!));
-    if (d.severity === 'error') addErrorExplainer(li, msg, d, tutorContext);
+    if (d.line !== null) li.addEventListener('click', () => onPick(d.line!, d));
+    // The explainer sends the editor's code: only right when there's one file.
+    if (d.severity === 'error' && !d.file) addErrorExplainer(li, msg, d, tutorContext);
     ui.problems.append(li);
   }
 }
@@ -116,6 +127,7 @@ let cursorTimer = 0;
 let inspector: Inspector | null = null;
 let debug: Debugger | null = null;
 let lessons: LessonController | null = null;
+let mesh: MeshMode | null = null;
 let lastDiagnostics: ShaderDiagnostic[] = [];
 const progress = loadProgress();
 
@@ -148,6 +160,10 @@ const editor = createEditor(
   ui.editor,
   '',
   (source) => {
+    if (mesh?.active) {
+      mesh.onEdit(source);
+      return;
+    }
     const owner = activeLessons();
     if (owner) owner.saveCode(source);
     else saveSource(source);
@@ -224,6 +240,7 @@ if (runner) {
     loadCode,
     tutorContext,
   });
+  mesh = new MeshMode(runner, new MeshScene(runner.gl, ui.canvas), editor, debug, { tabs: ui.fileTabs, fileName: ui.fileName, meshSelect: ui.meshSelect }, reportMesh);
 } else {
   ui.inspect.disabled = true;
   progress.mode = 'sandbox';
@@ -249,13 +266,65 @@ function setMode(mode: 'lessons' | 'sandbox') {
   for (const b of ui.modeSwitch.querySelectorAll<HTMLButtonElement>('button')) {
     b.classList.toggle('active', b.dataset.mode === mode);
   }
+  ui.viewSwitch.hidden = isLessons || !mesh;
   if (isLessons) {
+    setView('canvas', false);
     lessons!.open(lessons!.current.id);
   } else {
     runner?.setFixedSize(null);
     debug?.close();
-    loadCode(inStyle(loadSource()));
+    setView(progress.view ?? 'canvas', false);
   }
+}
+
+// ---------- sandbox view: 2D canvas or 3D mesh ----------
+
+/** Mesh mode has two files and its own picking; tools that assume one fragment shader step aside. */
+function setView(view: 'canvas' | 'mesh', remember = true) {
+  if (remember) {
+    progress.view = view;
+    saveProgress(progress);
+  }
+  const isMesh = view === 'mesh' && !!mesh && progress.mode === 'sandbox';
+  for (const b of ui.viewSwitch.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('active', b.dataset.view === (isMesh ? 'mesh' : 'canvas'));
+  if (isMesh) {
+    inspector?.setEnabled(false);
+    mesh!.enter();
+  } else if (mesh?.active) {
+    mesh.exit();
+  }
+  ui.inspect.disabled = isMesh || !inspector;
+  ui.inspect.title = isMesh ? 'Inspect values works on the 2D canvas for now.' : 'Show the value under your cursor across the whole canvas';
+  styleSelect.disabled = isMesh;
+  styleSelect.title = isMesh ? 'Mesh shaders are GLSL ES 3.00 (p5 names) for now; ES 1.00 code still runs.' : 'Show the code as GLSL ES 3.00, p5 style (ES 1.00) or a Shadertoy shader. Switching rewrites it.';
+  exportUi.open.disabled = isMesh;
+  exportUi.open.title = isMesh ? 'Exporting meshes comes later.' : 'Run this shader in p5.js or on Shadertoy';
+  $('tab-hint').textContent = isMesh
+    ? 'Click a vertex to step through it · Shift-click a second to compare · Drag to orbit'
+    : 'Click a pixel to step through it · Shift-click a second to compare';
+  ui.resetCode.title = isMesh ? 'Replace both shaders with the mesh example' : 'Replace your code with the example shader';
+  if (!isMesh && progress.mode === 'sandbox') loadCode(inStyle(loadSource()));
+}
+
+ui.viewSwitch.addEventListener('click', (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-view]');
+  if (b) setView(b.dataset.view as 'canvas' | 'mesh');
+});
+
+/** Show a mesh build: status pills, the errors of the file on screen, and both files' problems. */
+function reportMesh({ build, vertexParse, file }: MeshReport) {
+  const errors = [...build.vertex, ...build.fragment].filter((d) => d.severity === 'error').length;
+  if (build.ok) setPill(ui.statusCompile, `GPU ✓ ${build.ms.toFixed(0)}ms`, 'ok', 'Both shaders compiled and linked');
+  else setPill(ui.statusCompile, `GPU ✗ ${errors} error${errors === 1 ? '' : 's'}`, 'error', 'Showing the last pair that compiled');
+  if (vertexParse.ok) setPill(ui.statusAst, `AST ✓ ${vertexParse.ms.toFixed(1)}ms`, 'ok', 'The stepper understands the vertex shader');
+  else setPill(ui.statusAst, 'AST ✗', build.ok ? 'warn' : 'idle', `Vertex shader: ${vertexParse.diagnostic.message}`);
+  editor.showDiagnostics(file === 'vertex' ? build.vertex : build.fragment);
+  const problems: Problem[] = [...build.vertex.map((d) => ({ ...d, file: 'vertex' as const })), ...build.fragment.map((d) => ({ ...d, file: 'fragment' as const }))];
+  renderProblems(problems, (line, d) => {
+    if (d.file) mesh!.show(d.file);
+    editor.jumpToLine(line);
+  });
+  if (!build.ok && !debug?.active) debug?.showTab('problems');
 }
 
 // ---------- GLSL style: ES 3.00 or p5 (ES 1.00) ----------
@@ -463,6 +532,10 @@ if (runner) {
 }
 
 ui.resetCode.addEventListener('click', () => {
+  if (mesh?.active) {
+    mesh.loadExample();
+    return;
+  }
   const view = editor.view;
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: inStyle(DEFAULT_SHADER) },
@@ -478,5 +551,6 @@ if (import.meta.env.DEV) {
     debug,
     progress,
     tutorContext,
+    mesh,
   };
 }

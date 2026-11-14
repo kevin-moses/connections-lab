@@ -18,7 +18,7 @@ export const tolerance = (gpu: number) => 1e-3 + 1e-3 * Math.abs(gpu);
  * same pixel and uniforms. A mismatch means the stepper may be showing
  * values the GPU doesn't compute, so the UI warns about it.
  */
-export function crossCheck(trace: TraceResult, gpu: number[] | null): CrossCheck {
+export function crossCheck(trace: TraceResult, gpu: number[] | null, subject: 'pixel' | 'vertex' = 'pixel'): CrossCheck {
   if (trace.error) return { status: 'unavailable', cpu: null, gpu, maxDiff: 0, message: 'The stepper stopped early, so there is nothing to compare.' };
   if (!gpu) return { status: 'unavailable', cpu: null, gpu: null, maxDiff: 0, message: 'No compiled shader to compare against.' };
 
@@ -49,6 +49,6 @@ export function crossCheck(trace: TraceResult, gpu: number[] | null): CrossCheck
     if (!(d <= tolerance(b))) ok = false;
   }
   return ok
-    ? { status: 'match', cpu, gpu, maxDiff, message: 'Stepper and GPU agree on this pixel.' }
-    : { status: 'mismatch', cpu, gpu, maxDiff, message: 'Stepper and GPU disagree on this pixel. Treat the stepper\'s values with care.' };
+    ? { status: 'match', cpu, gpu, maxDiff, message: `Stepper and GPU agree on this ${subject}.` }
+    : { status: 'mismatch', cpu, gpu, maxDiff, message: `Stepper and GPU disagree on this ${subject}. Treat the stepper's values with care.` };
 }

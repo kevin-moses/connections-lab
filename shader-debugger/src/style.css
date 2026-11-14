@@ -69,6 +69,7 @@ button { font: inherit; }
 }
 
 .brand { display: flex; align-items: center; gap: 8px; }
+.brand .seg, .brand select { flex-shrink: 0; }
 .brand-mark {
   width: 14px;
   height: 14px;
@@ -516,6 +517,20 @@ button { font: inherit; }
   padding: 5px 8px;
   font: 600 13px var(--font-ui);
 }
+.file-tabs { display: flex; align-self: stretch; }
+.file-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  padding: 0 10px;
+  font: 12px var(--font-mono);
+  cursor: pointer;
+}
+.file-tabs button:hover { color: var(--text-dim); }
+.file-tabs button[aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); }
+.brand #mesh-select { margin-left: 2px; }
+
 .style-select {
   background: #1c2029;
   color: var(--text-dim);

@@ -15,6 +15,8 @@ export interface Progress {
   mode: 'lessons' | 'sandbox';
   /** How code is shown: GLSL ES 3.00, or p5 style (ES 1.00). */
   style: GlslStyle;
+  /** The sandbox's view: a fragment shader on a canvas, or vertex + fragment on a mesh. */
+  view?: 'canvas' | 'mesh';
   /** Exercise id the learner was last on. */
   current: string | null;
   exercises: Record<string, ExerciseProgress>;
@@ -27,7 +29,7 @@ export function loadProgress(): Progress {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<Progress>;
-      return { mode: p.mode ?? 'lessons', style: p.style ?? 'es300', current: p.current ?? null, exercises: p.exercises ?? {} };
+      return { mode: p.mode ?? 'lessons', style: p.style ?? 'es300', view: p.view === 'mesh' ? 'mesh' : 'canvas', current: p.current ?? null, exercises: p.exercises ?? {} };
     }
   } catch {
     /* fall through to a fresh start */
