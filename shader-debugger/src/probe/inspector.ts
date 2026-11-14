@@ -1,3 +1,4 @@
+import { detectStyle } from '../glsl/prepare';
 import type { Program } from '@shaderfrog/glsl-parser/ast';
 import type { ShaderRunner } from '../render/runner';
 import type { ShaderEditor } from '../editor/editor';
@@ -125,7 +126,7 @@ export class Inspector {
     }
     if (built.code === this.compiledCode) return; // nothing changed
 
-    const result = this.runner.buildProgram(built.code);
+    const result = this.runner.buildProgram(built.code, { ownOutputs: true, style: detectStyle(this.source) });
     if (!result.ok) {
       const first = result.diagnostics[0]?.message ?? 'unknown error';
       this.say(`Can't show ${target.label} as an image: ${first}`);

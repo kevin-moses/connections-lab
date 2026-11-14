@@ -6,7 +6,9 @@ import {
   BOOL,
   FLOAT,
   GlslRuntimeError,
+  INT,
   VEC2,
+  VEC3,
   VEC4,
   clone,
   construct,
@@ -31,6 +33,7 @@ import {
   type Value,
 } from './values';
 
+import { SHADERTOY_UNIFORMS, shadertoyValues } from '../glsl/shadertoy';
 import type { BuiltinCall, StepKind, TraceInputs, TraceOptions, TraceResult, TraceStep, VarSnap } from './trace';
 import {
   VOID,
@@ -146,6 +149,9 @@ class Interpreter {
   private stepCount = 0;
   private line = 0;
   private outputName: string | null = null;
+  /** Shadertoy: the entry point is mainImage, and its first (out) parameter is the output. */
+  private entryOutParam: string | null = null;
+  private entryOutput: AnyValue | null = null;
 
   constructor(
     private readonly ast: Program,
@@ -176,10 +182,21 @@ class Interpreter {
       }
 
       const main = this.functions.get('main')?.[0];
-      if (!main) throw new GlslRuntimeError('No main() function.');
-      this.invoke(main, [], main.line);
-      const out = this.outputName ? this.globals.vars.get(this.outputName) : undefined;
-      if (out && !isArrayValue(out.value)) result.output = { name: this.outputName!, value: clone(out.value) };
+      const mainImage = main ? undefined : this.functions.get('mainImage')?.[0];
+      if (mainImage) {
+        this.runMainImage(mainImage);
+        if (this.entryOutput && !isArrayValue(this.entryOutput)) {
+          // Shadertoy's image is opaque: alpha is always 1 on screen.
+          const v = clone(this.entryOutput);
+          if (v.data.length === 4) v.data[3] = 1;
+          result.output = { name: this.entryOutParam!, value: v };
+        }
+      } else {
+        if (!main) throw new GlslRuntimeError('No main() function (or Shadertoy mainImage()).');
+        this.invoke(main, [], main.line);
+        const out = this.outputName ? this.globals.vars.get(this.outputName) : undefined;
+        if (out && !isArrayValue(out.value)) result.output = { name: this.outputName!, value: clone(out.value) };
+      }
       if (this.finalExpression) {
         result.finalValue = this.finalValue;
         result.finalError = this.finalError;
@@ -199,6 +216,33 @@ class Interpreter {
     return result;
   }
 
+  /** Call Shadertoy's `mainImage(out vec4 fragColor, in vec2 fragCoord)` for this pixel. */
+  private runMainImage(fn: FnDef): void {
+    if (fn.params.length !== 2 || fn.params[0].qualifier !== 'out') {
+      throw new GlslRuntimeError('mainImage() should be mainImage(out vec4 fragColor, in vec2 fragCoord).', fn.line);
+    }
+    const [px, py] = this.inputs.pixel;
+    this.entryOutParam = fn.params[0].name;
+    this.invoke(fn, [{ value: zero(VEC4), lvalue: null }, { value: make(VEC2, [px + 0.5, py + 0.5]), lvalue: null }], fn.line);
+  }
+
+  /** Shadertoy's inputs, from the app's u_resolution / u_time / u_mouse (the same values the GPU gets). */
+  private declareShadertoyInputs(): void {
+    const u = this.inputs.uniforms;
+    const pair = (v: number | number[] | undefined, d: [number, number]): [number, number] => (Array.isArray(v) ? [v[0] ?? d[0], v[1] ?? d[1]] : d);
+    const values = shadertoyValues({ resolution: pair(u.u_resolution, [1, 1]), time: typeof u.u_time === 'number' ? u.u_time : 0, mouse: pair(u.u_mouse, [0, 0]) });
+    const types: Record<string, Type> = { float: FLOAT, int: INT, vec3: VEC3, vec4: VEC4 };
+    for (const s of SHADERTOY_UNIFORMS) {
+      const raw = values[s.name];
+      let value: AnyValue;
+      if (s.type === 'float[4]') value = zeroArray(FLOAT, 4);
+      else if (s.type === 'vec3[4]') value = zeroArray(VEC3, 4);
+      else if (s.type === 'sampler2D') value = make(INT, [0]); // a texture unit; texture() itself isn't steppable yet
+      else value = make(types[s.type], Array.isArray(raw) ? raw : [raw as number]);
+      this.globals.vars.set(s.name, { value, isConst: true, kind: 'uniform' });
+    }
+  }
+
   // ---------- setup ----------
 
   private setupGlobals(): void {
@@ -207,6 +251,9 @@ class Interpreter {
     g.set('gl_FragCoord', { value: make(VEC4, [px + 0.5, py + 0.5, 0.5, 1]), isConst: true, kind: 'input' });
     g.set('gl_FrontFacing', { value: make(BOOL, [1]), isConst: true, kind: 'input' });
     g.set('gl_PointCoord', { value: make(VEC2, [0, 0]), isConst: true, kind: 'input' });
+
+    const fnNames = (this.ast.program as AstNode[]).filter((n) => n.type === 'function').map((n) => (n as FunctionNode).prototype.header.name.identifier);
+    if (fnNames.includes('mainImage') && !fnNames.includes('main')) this.declareShadertoyInputs();
 
     this.pushFrame('<globals>', 1);
     for (const node of this.ast.program as AstNode[]) {
@@ -222,7 +269,7 @@ class Interpreter {
     }
     this.frames.pop();
 
-    if (!this.outputName && !this.globals.vars.has('gl_FragColor')) {
+    if (!this.outputName && !this.globals.vars.has('gl_FragColor') && !fnNames.includes('mainImage')) {
       g.set('gl_FragColor', { value: zero(VEC4), isConst: false, kind: 'output' });
       this.outputName = 'gl_FragColor';
     }
@@ -245,12 +292,30 @@ class Interpreter {
       const t = this.declType(l.specified_type.specifier, decl.quantifier);
       let value: AnyValue;
       if (isUniform) value = this.uniformValue(name, t);
+      else if (isIn) value = this.varyingValue(name, t);
       else if (decl.initializer) value = this.coerce(this.evaluate(decl.initializer), t);
       else value = this.zeroOf(t);
       const kind: Binding['kind'] = isUniform ? 'uniform' : isOut ? 'output' : isIn ? 'input' : 'global';
       this.globals.vars.set(name, { value, isConst: isConst || isUniform || isIn, kind });
       if (isOut && !this.outputName) this.outputName = name;
     }
+  }
+
+  /**
+   * The varyings the app's vertex shader supplies: `vTexCoord` like p5's
+   * full-canvas plane ((0, 0) at the top-left, y down) and `vUv` like
+   * three.js's PlaneGeometry ((0, 0) at the bottom-left). Others are 0.
+   */
+  private varyingValue(name: string, t: Type | ArrayDecl): AnyValue {
+    if ('length' in t) return zeroArray(t.elem, t.length);
+    const res = this.inputs.uniforms.u_resolution;
+    if ((name === 'vTexCoord' || name === 'vUv') && t.rows * t.cols === 2 && Array.isArray(res) && res[0] > 0 && res[1] > 0) {
+      const [px, py] = this.inputs.pixel;
+      const u = (px + 0.5) / res[0];
+      const v = (py + 0.5) / res[1];
+      return make(t, name === 'vUv' ? [u, v] : [u, 1 - v]);
+    }
+    return zero(t);
   }
 
   private uniformValue(name: string, t: Type | ArrayDecl): AnyValue {
@@ -420,14 +485,16 @@ class Interpreter {
       }
       if (this.frames.length === 1) {
         // Entry point finished: one last step showing the output.
-        const out = this.outputName ? this.globals.vars.get(this.outputName) : undefined;
+        const name = this.entryOutParam ?? this.outputName;
+        const out = this.entryOutParam ? frame.root.vars.get(this.entryOutParam) : this.outputName ? this.globals.vars.get(this.outputName) : undefined;
         const rb = (fn.node.body as unknown as { rb?: { location?: { start: { line: number } } } }).rb;
         const endLine = rb?.location?.start.line ?? fn.line;
-        this.emit('end', endLine, out ? `${this.outputName} = ${formatValue(out.value)}` : 'done');
+        this.emit('end', endLine, out ? `${name} = ${formatValue(out.value)}` : 'done');
       }
     } finally {
       // copy out/inout parameters back to the caller's variables
       const outs = fn.params.map((p, i) => ({ p, a: args[i], v: frame.root.vars.get(p.name)!.value }));
+      if (this.frames.length === 1 && this.entryOutParam) this.entryOutput = clone(frame.root.vars.get(this.entryOutParam)!.value);
       this.frames.pop();
       if (this.frames.length) {
         for (const { p, a, v } of outs) if (p.qualifier !== 'in' && a.lvalue) a.lvalue.set(v);

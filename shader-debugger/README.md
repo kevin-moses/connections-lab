@@ -80,6 +80,33 @@ Models (override in `.env`): `claude-sonnet-5-5` at medium effort for hints and 
 
 The proxy listens on 127.0.0.1 only and limits each client to `TUTOR_RATE_LIMIT` requests a minute (default 60). Not yet: a bring-your-own-key field (needed before deploying anywhere public).
 
+## Status: M5 (dialects) ✅: p5, Shadertoy, three.js
+
+**Paste a Shadertoy shader and debug it as is.** Code that defines `mainImage(out vec4 fragColor, in vec2 fragCoord)` and no `main` is wrapped the way shadertoy.com does it: its inputs declared in front, a `main` that calls `mainImage`. Canvas, Inspect values, the Debugger (it starts at `mainImage` with that pixel's `fragCoord`) and its GPU cross-check all work on it. Inputs come from the app's own: `iResolution = (u_resolution, 1)`, `iTime = u_time`, `iMouse = (u_mouse, 0, 0)`. `iFrame`, `iTimeDelta` and `iFrameRate` assume 60 fps, `iDate.w` is the time, and `iChannel0..3` read black (textures are a later stage). As on Shadertoy, the image is opaque.
+
+**Language dropdown** (GLSL ES 3.00, p5, Shadertoy) in the editor header. Switching rewrites the code with the parser. Comments and formatting are kept, and when something can't be converted it says why. Lessons stay written in ES 3.00; starters and saved code are shown in the chosen style.
+
+- **p5 style** is GLSL ES 1.00 as in p5's docs: the built-in `gl_FragColor`, `varying vec2 vTexCoord`, `texture2D`. The GPU path converts it the way three.js does (`#define`s plus one output declaration, lines mapped back), so errors land where you wrote them.
+- **Shadertoy style**: `main` ↔ `mainImage(out vec4 fragColor, in vec2 fragCoord)`, `gl_FragCoord.xy` ↔ `fragCoord`, `u_resolution` / `u_time` / `u_mouse` ↔ `iResolution.xy` / `iTime` / `iMouse.xy`. Other Shadertoy inputs keep their names and become declared uniforms in ES 3.00, which the app supplies.
+- The style is read from the code itself (Shadertoy defines `mainImage`, ES 3.00 declares an `out`, ES 1.00 writes `gl_FragColor`), so every tool works on any of the three whatever the dropdown says.
+- **three.js code runs as pasted**: a `ShaderMaterial` fragment shader is ES 1.00 or 3.00 code without a `precision` line (three adds one), so the app adds it too.
+- **Varyings**: `vTexCoord` matches p5's full-canvas plane (0..1, origin top-left, y down, measured in real p5 2.4.0), and `vUv` matches three.js's `PlaneGeometry` (origin bottom-left). Both are supplied in every style.
+
+**Export** (p5.js, three.js or Shadertoy). Uniforms keep the app's names everywhere (`u_resolution`, `u_time`, `u_mouse`, in the same units), and the p5 and three.js harnesses also set any Shadertoy inputs the code uses.
+- **p5.js**: a p5 2.x sketch (also runs on 1.x). Copy `sketch.js` for editor.p5js.org, or download a page that runs on its own.
+- **three.js**: a page that loads three r187 through an import map and draws a `PlaneGeometry(2, 2)` with a `ShaderMaterial`. ES 1.00 code runs as written, ES 3.00 with `glslVersion: THREE.GLSL3`. Download it, or copy `main.js`.
+- **Shadertoy**: the code in Shadertoy style, ready for the Image tab.
+
+Tested end to end: every lesson's reference passes its checks in p5 and in Shadertoy style, and conversions are stable both ways. The self-test runs each corpus shader in all three styles. Exports run in real p5 2.4.0 and real three.js r187 (from `node_modules`, no network) and match the app's pixels, in every style, including three.js-style code with `vUv` and no `precision`.
+
+Limits:
+- p5-style code may use ES 3.00-only features (bit operations, `uint`, `switch`) that the app accepts but real p5 (ES 1.00) won't compile.
+- Shadertoy multipass (Buffer A–D), textures, sound and cubemap passes aren't supported.
+- three.js: `RawShaderMaterial`, `#include` chunks and `onBeforeCompile` aren't converted; the fragment-only built-ins three declares (`cameraPosition`, `viewMatrix`, `isOrthographic`) aren't supplied.
+- p5 2.4.0 itself requests a translations file from the CDN that does not exist, so any sketch loading p5 from a CDN shows a harmless 404 in the console.
+
+The facts these choices rest on (p5 2.4.0 and three.js r187 behaviour) are in [docs/decisions/0001](docs/decisions/0001-dialects-keep-display-positions.md).
+
 ## Layout
 
 ```
@@ -87,7 +114,9 @@ shared/                  browser ↔ proxy contract (tutor.ts), GLSL reference, 
 server/                  Express proxy (loopback only) + request validation + rate limit
 server/tutor/            Tutor (cache, screen, retry), prompts, filter, material (lesson files), Claude model, stub
 src/tutor/               client (fetch + safe markdown), error explainer
-src/glsl/                linemap, prepare (version injection), diagnostics (info-log parsing), parse (AST)
+src/glsl/                linemap, prepare (ES 1.00 → 3.00 conversion, version injection), diagnostics (info-log parsing), parse (AST)
+src/dialects/            style conversion (convert: p5, Shadertoy, shared edits), export (p5 sketch, three.js page, Shadertoy)
+src/glsl/shadertoy.ts    Shadertoy's inputs: one table for the GPU header, uniform values and the interpreter
 src/render/              runner (WebGL2 loop, pluggable overlay), fullscreen pass (shared GPU plumbing), gl helpers, render types
 src/probe/               value-as-image: target, rewrite, probeLayer, visualize, inspector (UI)
 src/interp/              CPU interpreter: values, ops, builtins, interpreter, trace (types), astUtil, corpus
@@ -97,7 +126,7 @@ src/render/offscreen.ts  small GPU renderer for checks and the target preview
 lessons/                 lesson content (markdown, JSON, GLSL)
 selftest.html            GPU vs interpreter agreement report
 src/editor/              CodeMirror setup + GLSL language + reference (completion, hover docs)
-src/events.ts            typed Emitter used for frame, compile and tutor-status events
+src/events.ts            typed Emitter used for frame and compile events
 docs/decisions/          design decisions (0001: how M5 dialects keep positions)
 test/                    vitest (unit)
 e2e/                     Playwright smoke tests against real Chrome (npm run test:e2e)

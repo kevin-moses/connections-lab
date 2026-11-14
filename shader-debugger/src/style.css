@@ -131,7 +131,7 @@ button { font: inherit; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 32px;
+  min-height: 32px;
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
@@ -247,7 +247,7 @@ button { font: inherit; }
 
 /* ---------- inspect / probe ---------- */
 
-.head-actions { display: flex; align-items: center; gap: 6px; }
+.head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 6px; padding: 4px 0; }
 
 .btn-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px; }
 .toggle-dot {
@@ -306,6 +306,7 @@ button { font: inherit; }
   border-right: 1px solid var(--border);
   padding: 3px 9px;
   font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
 }
 .seg button:last-child { border-right: 0; }
@@ -515,6 +516,16 @@ button { font: inherit; }
   padding: 5px 8px;
   font: 600 13px var(--font-ui);
 }
+.style-select {
+  background: #1c2029;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font: 12px var(--font-ui);
+  cursor: pointer;
+}
+.style-select:hover, .style-select:focus-visible { color: var(--text); }
 .ex-dots { display: flex; gap: 6px; flex-wrap: wrap; }
 .ex-dot {
   width: 26px;
@@ -633,3 +644,32 @@ button { font: inherit; }
   .workspace, .workspace.with-lesson { grid-template-columns: 1fr; grid-template-rows: auto 55vh 70vh; }
   .editor-pane { border-right: none; border-bottom: 1px solid var(--border); }
 }
+
+/* ---------- export ---------- */
+
+.export-dialog {
+  width: min(720px, calc(100vw - 32px));
+  padding: 16px 18px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.export-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.export-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.export-dialog h2 { margin: 0; font-size: 15px; }
+.export-dialog p { margin: 0 0 10px; line-height: 1.45; }
+.export-dialog a { color: var(--accent); }
+.export-dialog code { font-family: var(--font-mono); font-size: 0.92em; }
+.export-warn { color: var(--warn); }
+.export-code {
+  max-height: 50vh;
+  overflow: auto;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/1.5 var(--font-mono);
+}
+.export-actions { display: flex; gap: 8px; justify-content: flex-end; }

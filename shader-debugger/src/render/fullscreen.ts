@@ -1,6 +1,6 @@
-import { prepareFragmentSource, type GlslVersion } from '../glsl/prepare';
+import { FRAG_COLOR_OUT, prepareFragmentSource, type PrepareOptions } from '../glsl/prepare';
 import { parseInfoLog, type ShaderDiagnostic } from '../glsl/diagnostics';
-import { compileShader, linkProgram, setCanonicalUniforms, FULLSCREEN_VS_100, FULLSCREEN_VS_300, type CanonicalUniforms } from './gl';
+import { compileShader, linkProgram, setCanonicalUniforms, FULLSCREEN_VS, type CanonicalUniforms } from './gl';
 
 // One triangle that covers the whole viewport.
 const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 3, -1, -1, 3]);
@@ -14,7 +14,7 @@ export type BuildResult = { ok: true; program: WebGLProgram } | { ok: false; dia
  */
 export class FullscreenPass {
   readonly vao: WebGLVertexArrayObject;
-  readonly vertexShaders: Record<GlslVersion, WebGLShader>;
+  readonly vertexShader: WebGLShader;
 
   constructor(readonly gl: WebGL2RenderingContext) {
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
@@ -24,21 +24,22 @@ export class FullscreenPass {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    const vs = (code: string) => {
-      const r = compileShader(gl, gl.VERTEX_SHADER, code);
-      if (!r.ok) throw new Error(`internal vertex shader: ${r.log}`);
-      return r.value;
-    };
-    this.vertexShaders = { '300 es': vs(FULLSCREEN_VS_300), '100': vs(FULLSCREEN_VS_100) };
+    const vs = compileShader(gl, gl.VERTEX_SHADER, FULLSCREEN_VS);
+    if (!vs.ok) throw new Error(`internal vertex shader: ${vs.log}`);
+    this.vertexShader = vs.value;
   }
 
-  /** Compile and link a learner's fragment shader (version line injected, errors on their lines). */
-  build(source: string): BuildResult {
+  /** Compile and link a learner's fragment shader (converted to ES 3.00, errors on their lines). */
+  build(source: string, options?: PrepareOptions): BuildResult {
     const gl = this.gl;
-    const prepared = prepareFragmentSource(source);
+    const prepared = prepareFragmentSource(source, options);
     const fs = compileShader(gl, gl.FRAGMENT_SHADER, prepared.code);
-    if (!fs.ok) return { ok: false, diagnostics: parseInfoLog(fs.log, prepared.map, source) };
-    const prog = linkProgram(gl, this.vertexShaders[prepared.version], fs.value);
+    if (!fs.ok) {
+      // Errors about converted ES 1.00 code use our names; show the learner's.
+      const log = fs.log.replaceAll(FRAG_COLOR_OUT, 'gl_FragColor');
+      return { ok: false, diagnostics: parseInfoLog(log, prepared.map, source) };
+    }
+    const prog = linkProgram(gl, this.vertexShader, fs.value);
     if (!prog.ok) return { ok: false, diagnostics: [{ line: null, message: prog.log.trim(), severity: 'error', origin: 'link' }] };
     return { ok: true, program: prog.value };
   }

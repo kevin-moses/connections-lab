@@ -1,3 +1,4 @@
+import { SHADERTOY_UNIFORMS, shadertoyValues } from '../glsl/shadertoy';
 export type CompileOutcome<T> = { ok: true; value: T } | { ok: false; log: string };
 
 export function compileShader(gl: WebGL2RenderingContext, type: GLenum, code: string): CompileOutcome<WebGLShader> {
@@ -28,13 +29,22 @@ export function linkProgram(
   return { ok: false, log };
 }
 
-export const FULLSCREEN_VS_300 = `#version 300 es
+/**
+ * Covers the viewport and supplies the usual 0..1 varyings: `vTexCoord` the
+ * way p5 does for a full-canvas plane ((0, 0) at the top-left, y down), and
+ * `vUv` the way three.js's PlaneGeometry does ((0, 0) at the bottom-left).
+ * Every learner shader is compiled as ES 3.00 (ES 1.00 code is converted
+ * first), so one vertex shader is enough.
+ */
+export const FULLSCREEN_VS = `#version 300 es
 in vec2 a_position;
-void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`;
-
-export const FULLSCREEN_VS_100 = `#version 100
-attribute vec2 a_position;
-void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`;
+out vec2 vTexCoord;
+out vec2 vUv;
+void main() {
+  vUv = a_position * 0.5 + 0.5;
+  vTexCoord = vec2(vUv.x, 1.0 - vUv.y);
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
 
 /** Canonical uniforms every learner shader may use. */
 export interface CanonicalUniforms {
@@ -43,11 +53,27 @@ export interface CanonicalUniforms {
   mouse: [number, number];
 }
 
+const SHADERTOY_NAMES = SHADERTOY_UNIFORMS.filter((s) => s.value).map((s) => s.name);
+const SHADERTOY_TYPES = new Map(SHADERTOY_UNIFORMS.map((s) => [s.name, s.type]));
+
 export function setCanonicalUniforms(gl: WebGL2RenderingContext, program: WebGLProgram, u: CanonicalUniforms) {
-  const loc = uniformLocations(gl, program);
+  const loc = uniformLocations(gl, program, SHADERTOY_NAMES);
   if (loc.resolution) gl.uniform2f(loc.resolution, u.resolution[0], u.resolution[1]);
   if (loc.time) gl.uniform1f(loc.time, u.time);
   if (loc.mouse) gl.uniform2f(loc.mouse, u.mouse[0], u.mouse[1]);
+  // Shadertoy's inputs, for programs that declare them (the GPU drops unused ones).
+  if (!SHADERTOY_NAMES.some((n) => loc[n])) return;
+  for (const [name, value] of Object.entries(shadertoyValues(u))) {
+    const l = loc[name];
+    if (!l) continue;
+    const v = Array.isArray(value) ? value : [value];
+    switch (SHADERTOY_TYPES.get(name)) {
+      case 'int': gl.uniform1i(l, v[0]); break;
+      case 'vec3': case 'vec3[4]': gl.uniform3fv(l, v); break;
+      case 'vec4': gl.uniform4fv(l, v); break;
+      default: gl.uniform1fv(l, v);
+    }
+  }
 }
 
 const locationCache = new WeakMap<WebGLProgram, Record<string, WebGLUniformLocation | null>>();

@@ -273,3 +273,57 @@ void main() { fragColor = vec4(rect(gl_FragCoord.xy, vec2(0.0), vec2(1.0))); }`;
     expect(capped.truncated).toBe(true);
   });
 });
+
+describe('p5-style (ES 1.00) shaders', () => {
+  it('supplies vTexCoord like p5 (origin top-left) and writes gl_FragColor', () => {
+    const src = 'precision mediump float;\nvarying vec2 vTexCoord;\nvoid main() {\n  gl_FragColor = vec4(vTexCoord, 0.0, 1.0);\n}';
+    const parsed = parseGlsl(src);
+    if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+    const r = traceFragment(parsed.ast, { pixel: [0, 99], uniforms: { u_resolution: [200, 100] } });
+    expect(r.error).toBeNull();
+    expect(r.output?.name).toBe('gl_FragColor');
+    const [x, y] = (r.output!.value as { data: number[] }).data;
+    expect(x).toBeCloseTo(0.5 / 200, 5);
+    expect(y).toBeCloseTo(0.005, 5); // the top row: vTexCoord.y is near 0
+  });
+});
+
+describe('three.js-style shaders', () => {
+  it('supplies vUv like three.js (origin bottom-left), with no precision line', () => {
+    const src = 'uniform vec2 u_resolution;\nvarying vec2 vUv;\nvoid main() {\n  gl_FragColor = vec4(vUv, 0.0, 1.0);\n}';
+    const parsed = parseGlsl(src);
+    if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+    const r = traceFragment(parsed.ast, { pixel: [0, 99], uniforms: { u_resolution: [200, 100] } });
+    const [x, y] = (r.output!.value as { data: number[] }).data;
+    expect(x).toBeCloseTo(0.5 / 200, 5);
+    expect(y).toBeCloseTo(0.995, 5); // the top row: vUv.y is near 1
+  });
+});
+
+describe('Shadertoy shaders', () => {
+  const src = `void mainImage(out vec4 O, in vec2 U) {
+  vec2 uv = U / iResolution.xy;
+  O = vec4(uv, fract(iTime), 0.0);
+}`;
+  it('runs mainImage with the pixel position and Shadertoy inputs, and the output is opaque', () => {
+    const parsed = parseGlsl(src);
+    if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+    const r = traceFragment(parsed.ast, { pixel: [49, 9], uniforms: { u_resolution: [100, 20], u_time: 2.25, u_mouse: [0, 0] } });
+    expect(r.error).toBeNull();
+    expect(r.output?.name).toBe('O');
+    const d = (r.output!.value as { data: number[] }).data;
+    expect(d[0]).toBeCloseTo(0.495, 5);
+    expect(d[1]).toBeCloseTo(0.475, 5);
+    expect(d[2]).toBeCloseTo(0.25, 5);
+    expect(d[3]).toBe(1);
+    expect(r.inputs.map((i) => i.name)).toContain('iResolution');
+    expect(r.steps.at(-1)?.text).toContain('O = ');
+  });
+
+  it('says plainly when a texture channel is read', () => {
+    const parsed = parseGlsl('void mainImage(out vec4 c, in vec2 p) { c = texture(iChannel0, p / iResolution.xy); }');
+    if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+    const r = traceFragment(parsed.ast, { pixel: [0, 0], uniforms: { u_resolution: [4, 4] } });
+    expect(r.error?.message).toMatch(/can't run texture\(\) yet/);
+  });
+});

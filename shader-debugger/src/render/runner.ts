@@ -1,3 +1,4 @@
+import type { PrepareOptions } from '../glsl/prepare';
 import type { ShaderDiagnostic } from '../glsl/diagnostics';
 import { Emitter } from '../events';
 import type { CanonicalUniforms } from './gl';
@@ -108,8 +109,8 @@ export class ShaderRunner {
   }
 
   /** Build another full-screen program on this context (e.g. a probe shader) without showing it. */
-  buildProgram(source: string): BuildResult {
-    return this.pass.build(source);
+  buildProgram(source: string, options?: PrepareOptions): BuildResult {
+    return this.pass.build(source, options);
   }
 
   start(): void {

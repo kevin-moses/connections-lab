@@ -24,7 +24,7 @@ describe('parseInfoLog', () => {
   it("says how to declare an app uniform the shader uses but didn't declare", () => {
     const src = 'void main() {\n  float t = u_time;\n}';
     const { map: m } = prepareFragmentSource(src);
-    const [d] = parseInfoLog("ERROR: 0:3: 'u_time' : undeclared identifier", m, src);
+    const [d] = parseInfoLog(`ERROR: 0:${m.toGenerated(2)}: 'u_time' : undeclared identifier`, m, src);
     expect(d.message).toBe("undeclared identifier 'u_time'. The app supplies it, but you have to declare it: add `uniform float u_time;` at the top");
     expect(d).toMatchObject({ line: 2, from: 12, to: 18 });
   });
@@ -38,7 +38,7 @@ describe('parseInfoLog', () => {
   it('matches whole words only for identifier tokens', () => {
     const src = 'void main() {\n  float uvx = uv;\n}';
     const { map: m } = prepareFragmentSource(src);
-    const [d] = parseInfoLog("ERROR: 0:3: 'uv' : undeclared identifier", m, src);
+    const [d] = parseInfoLog(`ERROR: 0:${m.toGenerated(2)}: 'uv' : undeclared identifier`, m, src);
     expect(d).toMatchObject({ line: 2, from: 14, to: 16 });
   });
 

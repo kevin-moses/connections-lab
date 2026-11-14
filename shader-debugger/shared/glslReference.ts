@@ -41,6 +41,15 @@ export const GLSL_REFERENCE: GlslEntry[] = [
   v('u_time', 'uniform float', 'Seconds since the shader started (pauses with the Play button).', 'float t = u_time * 2.0; // twice as fast'),
   v('u_mouse', 'uniform vec2', 'Mouse position in pixels, origin bottom-left.', 'float near = distance(gl_FragCoord.xy, u_mouse);'),
   v('fragColor', 'out vec4', 'The color this pixel ends up with: (r, g, b, a), each 0 to 1.', 'fragColor = vec4(0.2, 0.6, 1.0, 1.0); // sky blue'),
+  v('gl_FragColor', 'vec4', "p5 style (GLSL ES 1.00): the color this pixel ends up with. It's built in, so you don't declare it; ES 3.00 uses your own `out vec4` instead."),
+  v('vUv', 'varying vec2', "three.js's 0..1 position on the canvas, origin bottom-left (like gl_FragCoord). Declare it: `varying vec2 vUv;`."),
+  v('iResolution', 'uniform vec3', 'Shadertoy: canvas size in pixels (.xy); .z is the pixel aspect, 1.0.', 'vec2 center = 0.5 * iResolution.xy;'),
+  v('iTime', 'uniform float', 'Shadertoy: seconds since the shader started.'),
+  v('iMouse', 'uniform vec4', 'Shadertoy: mouse position in pixels (.xy). On shadertoy.com .zw hold the click; here they stay 0.'),
+  v('iFrame', 'uniform int', 'Shadertoy: frames since the start (here: u_time × 60).'),
+  v('iTimeDelta', 'uniform float', 'Shadertoy: seconds per frame (here a fixed 1/60).'),
+  v('iChannel0', 'uniform sampler2D', "Shadertoy: an input texture. Textures aren't supported yet, so it reads black."),
+  v('vTexCoord', 'varying vec2', "p5's 0..1 position on the canvas, origin top-left, y down (unlike gl_FragCoord). Declare it: `varying vec2 vTexCoord;`.", 'float fromTop = vTexCoord.y;'),
 
   // Angles and trigonometry
   fn('radians', g1('radians').map((s) => s.replace('x', 'degrees')), 'Degrees to radians (× π/180).', 'float a = radians(90.0); // 1.5708'),
@@ -122,6 +131,7 @@ export const GLSL_REFERENCE: GlslEntry[] = [
 
   // Textures and derivatives (GPU only for now)
   fn('texture', ['vec4 texture(sampler2D s, vec2 uv)'], 'Reads a texture at uv (0..1).', undefined, false),
+  fn('texture2D', ['vec4 texture2D(sampler2D s, vec2 uv)'], 'p5 style (GLSL ES 1.00) name for texture(): reads a texture at uv (0..1).', undefined, false),
   fn('texelFetch', ['vec4 texelFetch(sampler2D s, ivec2 p, int lod)'], 'Reads one texel by integer coordinates.', undefined, false),
   fn('textureSize', ['ivec2 textureSize(sampler2D s, int lod)'], "A texture's size in texels.", undefined, false),
   fn('dFdx', g1('dFdx').map((s) => s.replace('x)', 'p)')), 'How much p changes to the next pixel on the right.', undefined, false),

@@ -38,7 +38,9 @@ export const glsl = StreamLanguage.define(
       true false
       gl_FragCoord gl_FrontFacing gl_PointCoord gl_FragDepth gl_FragColor
       gl_Position gl_PointSize gl_VertexID gl_InstanceID
-      u_resolution u_time u_mouse`),
+      u_resolution u_time u_mouse vTexCoord vUv
+      iResolution iTime iTimeDelta iFrameRate iFrame iMouse iDate iSampleRate
+      iChannel0 iChannel1 iChannel2 iChannel3 iChannelTime iChannelResolution`),
     indentSwitch: false,
     hooks: {
       '#': (stream: { skipToEnd(): void }) => {

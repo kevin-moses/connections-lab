@@ -47,7 +47,13 @@
         <div class="pane-head">
           <span class="file-name">fragment.glsl</span>
           <div class="head-actions">
+            <select id="style-select" class="style-select" aria-label="Shader language" title="Show the code as GLSL ES 3.00, p5 style (ES 1.00) or a Shadertoy shader. Switching rewrites it.">
+              <option value="es300" title="Modern GLSL ES 3.00: out vec4 fragColor, in, texture()">GLSL ES 3.00</option>
+              <option value="es100" title="p5 style, GLSL ES 1.00 as in p5's docs: gl_FragColor, varying vTexCoord, texture2D()">p5 (ES 1.00)</option>
+              <option value="shadertoy" title="mainImage(out vec4 fragColor, in vec2 fragCoord), iResolution, iTime, iMouse">Shadertoy</option>
+            </select>
             <button id="reset-code" class="btn btn-quiet" title="Replace your code with the example shader">Load example</button>
+            <button id="export" class="btn btn-quiet" title="Run this shader in p5.js or on Shadertoy">Export</button>
             <button id="inspect" class="btn btn-toggle" aria-pressed="false" title="Show the value under your cursor across the whole canvas">
               <span class="toggle-dot" aria-hidden="true"></span>Inspect values
             </button>
@@ -148,6 +154,29 @@
         </div>
       </section>
     </main>
+
+    <dialog id="export-dialog" class="export-dialog" aria-labelledby="export-title">
+      <form method="dialog">
+        <div class="export-head">
+          <h2 id="export-title">Export</h2>
+          <div id="export-target" class="seg" role="group" aria-label="Export to">
+            <button type="button" data-target="p5">p5.js</button>
+            <button type="button" data-target="three">three.js</button>
+            <button type="button" data-target="shadertoy">Shadertoy</button>
+          </div>
+        </div>
+        <p id="export-help-p5" class="muted">Paste <code>sketch.js</code> into <a href="https://editor.p5js.org" target="_blank" rel="noopener">editor.p5js.org</a>, or download a page that runs on its own. It sets <code>u_resolution</code>, <code>u_time</code> and <code>u_mouse</code> the same way this app does.</p>
+        <p id="export-help-three" class="muted" hidden>A page that runs it full-screen in three.js (a <code>ShaderMaterial</code> on a plane), loading three from a CDN: download it and open it. Or copy <code>main.js</code> into a project that has three installed. It sets <code>u_resolution</code>, <code>u_time</code> and <code>u_mouse</code> the same way this app does.</p>
+        <p id="export-help-shadertoy" class="muted" hidden>Open <a href="https://www.shadertoy.com/new" target="_blank" rel="noopener">shadertoy.com/new</a> and replace everything in the Image tab with this.</p>
+        <p id="export-warn" class="export-warn" hidden>Your code doesn't compile right now, so the sketch won't either.</p>
+        <pre id="export-code" class="export-code"></pre>
+        <div class="export-actions">
+          <button type="button" id="export-copy" class="btn">Copy</button>
+          <button type="button" id="export-download" class="btn btn-primary">Download .html</button>
+          <button value="close" class="btn btn-quiet">Close</button>
+        </div>
+      </form>
+    </dialog>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

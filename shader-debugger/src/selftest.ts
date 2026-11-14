@@ -3,6 +3,17 @@ import { parseGlsl } from './glsl/parse';
 import { traceFragment } from './interp/interpreter';
 import { crossCheck } from './debugger/crossCheck';
 import { CORPUS } from './interp/corpus';
+import { convertStyle } from './dialects/convert';
+
+/** Every corpus shader as written (ES 3.00), and again as p5 (ES 1.00) and Shadertoy code, which reach the GPU through conversion. */
+const SHADERS = CORPUS.flatMap(({ name, source }) => {
+  const out = [{ name, source }];
+  for (const [style, label] of [['es100', 'p5 style'], ['shadertoy', 'Shadertoy']] as const) {
+    const converted = convertStyle(source, style);
+    if (converted && converted !== source) out.push({ name: `${name} (${label})`, source: converted });
+  }
+  return out;
+});
 
 const W = 320;
 const H = 240;
@@ -19,7 +30,7 @@ export interface SelfTestRow {
 function run(): SelfTestRow[] {
   const runner = new ShaderRunner(document.getElementById('c') as HTMLCanvasElement, [W, H]);
   const rows: SelfTestRow[] = [];
-  for (const { name, source } of CORPUS) {
+  for (const { name, source } of SHADERS) {
     const row: SelfTestRow = { name, pixels: 0, passed: 0, maxDiff: 0, notes: [] };
     rows.push(row);
     const compiled = runner.compile(source);

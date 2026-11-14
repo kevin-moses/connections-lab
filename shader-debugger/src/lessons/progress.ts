@@ -1,3 +1,5 @@
+import type { GlslStyle } from '../glsl/prepare';
+
 /** Per-viewer lesson progress, kept in localStorage (may be unavailable). */
 
 export interface ExerciseProgress {
@@ -11,6 +13,8 @@ export interface ExerciseProgress {
 
 export interface Progress {
   mode: 'lessons' | 'sandbox';
+  /** How code is shown: GLSL ES 3.00, or p5 style (ES 1.00). */
+  style: GlslStyle;
   /** Exercise id the learner was last on. */
   current: string | null;
   exercises: Record<string, ExerciseProgress>;
@@ -23,12 +27,12 @@ export function loadProgress(): Progress {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<Progress>;
-      return { mode: p.mode ?? 'lessons', current: p.current ?? null, exercises: p.exercises ?? {} };
+      return { mode: p.mode ?? 'lessons', style: p.style ?? 'es300', current: p.current ?? null, exercises: p.exercises ?? {} };
     }
   } catch {
     /* fall through to a fresh start */
   }
-  return { mode: 'lessons', current: null, exercises: {} };
+  return { mode: 'lessons', style: 'es300', current: null, exercises: {} };
 }
 
 let saveTimer = 0;

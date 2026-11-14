@@ -129,11 +129,16 @@ describe('buildProbeShader', () => {
     expect(out[4].startsWith('uniform highp float u_sd_iter;')).toBe(true);
   });
 
-  it('refuses ES 1.00 shaders for now', () => {
-    const src = '#version 100\nprecision mediump float;\nvoid main(){ float a = 1.0; gl_FragColor = vec4(a); }\n';
+  it('probes ES 1.00 (p5-style) shaders too: gl_FragColor stays a global the epilogue ignores', () => {
+    const src = 'precision mediump float;\nvarying vec2 vTexCoord;\nvoid main(){ float a = vTexCoord.x; gl_FragColor = vec4(a); }\n';
     const r = parseGlsl(src);
     if (!r.ok) throw new Error(r.diagnostic.message);
     const t = resolveProbeTarget(r.ast, src, src.indexOf('float a'))!;
-    expect(buildProbeShader(r.ast, src, t).ok).toBe(false);
+    const built = buildProbeShader(r.ast, src, t);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    expect(built.code).toContain('void _sd_main()');
+    expect(built.code).toContain('_sd_capture(_sd_v(a));');
+    expect(built.code.split('\n').length).toBeGreaterThanOrEqual(src.split('\n').length);
   });
 });

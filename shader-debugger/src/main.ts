@@ -7,6 +7,9 @@ import { ShaderRunner, type CompileResult } from './render/runner';
 import { Emitter } from './events';
 import type { CodeContext } from '../shared/tutor';
 import { DEFAULT_SHADER } from './defaultShader';
+import { convert, convertStyle } from './dialects/convert';
+import { exportP5, exportThree } from './dialects/export';
+import { detectStyle, type GlslStyle } from './glsl/prepare';
 import { Inspector } from './probe/inspector';
 import { Debugger } from './debugger/debugger';
 import { LESSONS } from './lessons/content';
@@ -251,9 +254,126 @@ function setMode(mode: 'lessons' | 'sandbox') {
   } else {
     runner?.setFixedSize(null);
     debug?.close();
-    loadCode(loadSource());
+    loadCode(inStyle(loadSource()));
   }
 }
+
+// ---------- GLSL style: ES 3.00 or p5 (ES 1.00) ----------
+
+const styleSelect = $<HTMLSelectElement>('style-select');
+
+/** `code` in the chosen style, or unchanged if it doesn't parse. */
+function inStyle(code: string): string {
+  return detectStyle(code) === progress.style ? code : (convertStyle(code, progress.style) ?? code);
+}
+
+function showStyle() {
+  styleSelect.value = progress.style;
+}
+
+/** Switch styles, rewriting the editor's code (it has to parse to be converted). */
+function setStyle(style: GlslStyle) {
+  if (style === progress.style) return;
+  const r = convert(editor.getSource(), style);
+  if (!r.ok) {
+    alert(`Can't switch styles: ${r.reason}`);
+    showStyle(); // put the dropdown back
+    return;
+  }
+  const converted = r.code;
+  progress.style = style;
+  saveProgress(progress);
+  showStyle();
+  const owner = activeLessons();
+  if (owner) {
+    owner.saveCode(converted);
+    owner.open(owner.current.id);
+  } else {
+    saveSource(converted);
+    loadCode(converted);
+  }
+}
+
+styleSelect.addEventListener('change', () => setStyle(styleSelect.value as GlslStyle));
+showStyle();
+
+// ---------- export to p5 ----------
+
+const exportUi = {
+  open: $<HTMLButtonElement>('export'),
+  dialog: $<HTMLDialogElement>('export-dialog'),
+  target: $('export-target'),
+  helpP5: $('export-help-p5'),
+  helpThree: $('export-help-three'),
+  helpToy: $('export-help-shadertoy'),
+  code: $('export-code'),
+  warn: $('export-warn'),
+  copy: $<HTMLButtonElement>('export-copy'),
+  download: $<HTMLButtonElement>('export-download'),
+};
+type ExportTarget = 'p5' | 'three' | 'shadertoy';
+let exportTarget: ExportTarget = 'p5';
+/** What Copy copies, and what Download saves (p5 and three.js). */
+let exported: { copy: string; html?: string; file?: string } | null = null;
+
+function renderExport() {
+  const source = editor.getSource();
+  const lesson = activeLessons()?.current;
+  for (const b of exportUi.target.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('active', b.dataset.target === exportTarget);
+  exportUi.helpP5.hidden = exportTarget !== 'p5';
+  exportUi.helpThree.hidden = exportTarget !== 'three';
+  exportUi.helpToy.hidden = exportTarget !== 'shadertoy';
+  exportUi.warn.hidden = !lastDiagnostics.some((d) => d.severity === 'error');
+  exportUi.copy.textContent = { p5: 'Copy sketch.js', three: 'Copy main.js', shadertoy: 'Copy for Shadertoy' }[exportTarget];
+  exportUi.download.hidden = exportTarget === 'shadertoy';
+
+  let r: { ok: true; copy: string; html?: string } | { ok: false; reason: string };
+  const [width, height] = runner?.fixed ?? [400, 400];
+  const title = lesson ? `${lesson.config.title} (Shader Debugger)` : 'Shader Debugger sketch';
+  if (exportTarget === 'p5') {
+    const p = exportP5(source, { width, height, title });
+    r = p.ok ? { ok: true, copy: p.sketchJs, html: p.html } : p;
+  } else if (exportTarget === 'three') {
+    const t = exportThree(source, { width, height, title });
+    r = t.ok ? { ok: true, copy: t.mainJs, html: t.html } : t;
+  } else {
+    const t = convert(source, 'shadertoy');
+    r = t.ok ? { ok: true, copy: t.code } : t;
+  }
+  const file = `${lesson ? lesson.id.replace('/', '-') : 'shader'}${exportTarget === 'three' ? '-three' : ''}.html`;
+  exported = r.ok ? { copy: r.copy, html: r.html, file } : null;
+  exportUi.code.textContent = r.ok ? r.copy : `Can't export this: ${r.reason}`;
+  exportUi.copy.disabled = exportUi.download.disabled = !r.ok;
+}
+
+exportUi.open.addEventListener('click', () => {
+  exportTarget = detectStyle(editor.getSource()) === 'shadertoy' ? 'shadertoy' : 'p5';
+  renderExport();
+  exportUi.dialog.showModal();
+});
+exportUi.target.addEventListener('click', (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-target]');
+  if (!b) return;
+  exportTarget = b.dataset.target as ExportTarget;
+  renderExport();
+});
+exportUi.copy.addEventListener('click', async () => {
+  if (!exported) return;
+  try {
+    await navigator.clipboard.writeText(exported.copy);
+    exportUi.copy.textContent = 'Copied ✓';
+  } catch {
+    exportUi.copy.textContent = 'Select the code and copy it';
+  }
+});
+exportUi.download.addEventListener('click', () => {
+  if (!exported?.html) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([exported.html], { type: 'text/html' }));
+  a.download = exported.file!;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
 ui.modeSwitch.addEventListener('click', (e) => {
   const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]');
@@ -345,7 +465,7 @@ if (runner) {
 ui.resetCode.addEventListener('click', () => {
   const view = editor.view;
   view.dispatch({
-    changes: { from: 0, to: view.state.doc.length, insert: DEFAULT_SHADER },
+    changes: { from: 0, to: view.state.doc.length, insert: inStyle(DEFAULT_SHADER) },
   });
 });
 

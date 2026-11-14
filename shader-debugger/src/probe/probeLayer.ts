@@ -81,7 +81,7 @@ export class ProbeLayer implements Overlay {
   constructor(pass: FullscreenPass) {
     const gl = (this.gl = pass.gl);
     this.vao = pass.vao;
-    const vs = pass.vertexShaders['300 es'];
+    const vs = pass.vertexShader;
     if (!gl.getExtension('EXT_color_buffer_float')) {
       throw new Error('This GPU/browser cannot render to float textures (EXT_color_buffer_float).');
     }

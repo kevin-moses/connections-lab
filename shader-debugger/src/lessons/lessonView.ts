@@ -7,6 +7,8 @@ import { checkExercise, type CheckItem, type CheckReport } from './checker';
 import { answerFromLabel, revealPrediction, type Reveal } from './predict';
 import { saveProgress, type Progress } from './progress';
 import { DEFAULT_CANVAS, type Exercise, type Lesson } from './types';
+import { convertStyle } from '../dialects/convert';
+import { detectStyle } from '../glsl/prepare';
 import type { CheckSummary, CodeContext, HintLevel } from '../../shared/tutor';
 import { askTutor, tutorHtml, tutorInlineHtml } from '../tutor/client';
 
@@ -67,9 +69,9 @@ export class LessonController {
     d.ui.next.addEventListener('click', () => this.step(1));
     d.ui.reset.addEventListener('click', () => {
       if (!confirm('Replace your code for this exercise with the starter code?')) return;
-      this.state.code = this.exercise.starter;
+      this.state.code = this.starter;
       saveProgress(d.progress);
-      d.loadCode(this.exercise.starter);
+      d.loadCode(this.starter);
     });
   }
 
@@ -83,7 +85,12 @@ export class LessonController {
 
   /** The learner's code for the current exercise. */
   get code(): string {
-    return this.state.code ?? this.exercise.starter;
+    return this.state.code ?? this.starter;
+  }
+
+  /** The starter, in the style the learner picked. */
+  private get starter(): string {
+    return convertStyle(this.exercise.starter, this.d.progress.style) ?? this.exercise.starter;
   }
 
   /** Latest checklist, for the tutor. */
@@ -106,6 +113,12 @@ export class LessonController {
     this.d.debug.close();
     this.d.runner.setFixedSize(this.canvasSize);
     this.render();
+    // Show saved code in the chosen style too (left alone if it doesn't parse).
+    const code = this.code;
+    if (this.state.code !== undefined && detectStyle(code) !== this.d.progress.style) {
+      this.state.code = convertStyle(code, this.d.progress.style) ?? code;
+      saveProgress(this.d.progress);
+    }
     this.d.loadCode(this.code);
   }
 
@@ -284,7 +297,7 @@ export class LessonController {
 
     const showResult = (said: string, r: Reveal) => {
       input.replaceChildren();
-      const edited = this.code.replace(/\s+/g, '') !== this.exercise.starter.replace(/\s+/g, '');
+      const edited = this.code.replace(/\s+/g, '') !== this.starter.replace(/\s+/g, '');
       const note = edited
         ? `<p class="muted predict-note">Graded on the starter code, so your edits don't change the answer.${this.ast ? ' The Debugger shows your current code at that pixel.' : ''}</p>`
         : '';

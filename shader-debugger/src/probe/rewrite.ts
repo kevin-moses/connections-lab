@@ -51,15 +51,18 @@ const PREAMBLE = [
   `void _sd_capture(highp vec4 v) { _sd_hits += 1.0; if (${PROBE_ITER_UNIFORM} < 0.5 || _sd_hits == ${PROBE_ITER_UNIFORM}) { _sd_value = v; _sd_at = _sd_hits; } }`,
 ].join(' ');
 
-const EPILOGUE = `
+/** The probe's `main`: runs the learner's entry point, then writes the capture. */
+const epilogue = (call: string) => `
 layout(location = 0) out highp vec4 _sd_out_value;
 layout(location = 1) out highp vec4 _sd_out_meta;
 void main() {
-  _sd_main();
+  ${call}
   _sd_out_value = _sd_value;
   _sd_out_meta = vec4(_sd_hits, _sd_dim, _sd_kind, _sd_at);
 }
 `;
+/** A Shadertoy shader has no `main`: call its `mainImage` the way Shadertoy does. */
+const MAIN_IMAGE_CALL = 'highp vec4 _sd_color = vec4(0.0); mainImage(_sd_color, gl_FragCoord.xy);';
 
 export type ProbeShaderResult = { ok: true; code: string } | { ok: false; reason: string };
 
@@ -77,12 +80,9 @@ interface Edit {
  * numbers in GPU errors still match the editor.
  */
 export function buildProbeShader(ast: Program, source: string, target: ProbeTarget): ProbeShaderResult {
-  if (/^\s*#\s*version\s+100\b/m.test(source)) {
-    return { ok: false, reason: 'Value inspection needs a GLSL ES 3.00 shader (ES 1.00 support arrives with dialects).' };
-  }
-
   const edits: Edit[] = [];
   let mainFound = false;
+  let mainImageFound = false;
   let firstFunctionStart: number | null = null;
 
   for (const stmt of ast.program as AstNode[]) {
@@ -90,6 +90,7 @@ export function buildProbeShader(ast: Program, source: string, target: ProbeTarg
       const fn = stmt as FunctionNode;
       firstFunctionStart ??= fn.location!.start.offset;
       const name = fn.prototype.header.name;
+      if (name.identifier === 'mainImage') mainImageFound = true;
       if (name.identifier === 'main') {
         mainFound = true;
         const start = name.location!.start.offset;
@@ -119,7 +120,7 @@ export function buildProbeShader(ast: Program, source: string, target: ProbeTarg
     }
   }
 
-  if (!mainFound) return { ok: false, reason: 'No main() function found.' };
+  if (!mainFound && !mainImageFound) return { ok: false, reason: 'No main() function (or Shadertoy mainImage()) found.' };
   if (firstFunctionStart === null) return { ok: false, reason: 'No functions found.' };
 
   edits.push({ start: firstFunctionStart, end: firstFunctionStart, text: `${PREAMBLE} ` });
@@ -141,7 +142,7 @@ export function buildProbeShader(ast: Program, source: string, target: ProbeTarg
       break;
   }
 
-  return { ok: true, code: applyEdits(source, edits) + EPILOGUE };
+  return { ok: true, code: applyEdits(source, edits) + epilogue(mainFound ? '_sd_main();' : MAIN_IMAGE_CALL) };
 }
 
 function applyEdits(source: string, edits: Edit[]): string {

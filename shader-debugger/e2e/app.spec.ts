@@ -92,3 +92,124 @@ test('a selection on the cursor line is visible', async ({ page }) => {
   });
   expect(alpha).toBeLessThan(0.2);
 });
+
+test('p5 style: the toggle converts lesson code, and checks, Inspect values and the Debugger all work on it', async ({ page }) => {
+  const id = '03-step/03-rectangle';
+  await page.goto('/');
+  await openExercise(page, id);
+  await page.locator('#style-select').selectOption('es100');
+  const code = () => page.evaluate(() => window.__sd.editor.view.state.doc.toString());
+  expect(await code()).toContain('gl_FragColor = ');
+  expect(await code()).not.toContain('out vec4');
+
+  // The reference, in p5 style, passes.
+  const p5 = await page.evaluate(async (src) => {
+    const url = '/src/dialects/convert.ts'; // served by Vite
+    const { convertStyle } = (await import(/* @vite-ignore */ url)) as { convertStyle(s: string, to: string): string };
+    return convertStyle(src, 'es100');
+  }, lessonFile(id, 'reference.glsl'));
+  await setCode(page, p5);
+  await expect(page.locator('.checks-banner')).toContainText('Exercise complete');
+
+  const line = p5.split('\n').findIndex((l) => l.includes('float bandY')) + 1;
+  await cursorToLine(page, line);
+  await page.locator('#inspect').click();
+  await expect(page.locator('#probe-expr')).toHaveText('bandY');
+  await page.locator('#inspect').click();
+
+  await page.locator('#view').click();
+  await expect(page.locator('#dbg-check')).toHaveText('GPU ✓ agrees');
+
+  // Back to ES 3.00, and the choice is remembered.
+  await page.locator('#style-select').selectOption('es300');
+  expect(await code()).toContain('out vec4 fragColor;');
+  await page.reload();
+  await expect(page.locator('#style-select')).toHaveValue('es300');
+});
+
+test('export: the dialog shows a p5 sketch and a three.js page for the current code', async ({ page }) => {
+  await page.goto('/');
+  await openExercise(page, '01-coordinates/01-red-ramp');
+  await page.locator('#export').click();
+  await expect(page.locator('#export-dialog')).toBeVisible();
+  await expect(page.locator('#export-code')).toContainText('createShader(vert, frag)');
+  await expect(page.locator('#export-code')).toContainText("setUniform('u_resolution'");
+  const download = page.waitForEvent('download');
+  await page.locator('#export-download').click();
+  expect((await download).suggestedFilename()).toBe('01-coordinates-01-red-ramp.html');
+
+  await page.locator('#export-target [data-target="three"]').click();
+  await expect(page.locator('#export-code')).toContainText('new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms, glslVersion: THREE.GLSL3 })');
+  await expect(page.locator('#export-copy')).toHaveText('Copy main.js');
+  const threeDownload = page.waitForEvent('download');
+  await page.locator('#export-download').click();
+  expect((await threeDownload).suggestedFilename()).toBe('01-coordinates-01-red-ramp-three.html');
+});
+
+const SHADERTOY_TEMPLATE = `void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord/iResolution.xy;
+
+    // Time varying pixel color
+    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+
+    // Output to screen
+    fragColor = vec4(col,1.0);
+}`;
+
+test('Shadertoy: paste a shader and debug it as is', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#mode-switch [data-mode="sandbox"]').click();
+  await setCode(page, SHADERTOY_TEMPLATE);
+  await expect(page.locator('#status-compile')).toHaveText(/GPU ✓/);
+  await expect(page.locator('#status-ast')).toHaveText(/AST ✓/);
+
+  await cursorToLine(page, 7);
+  await page.locator('#inspect').click();
+  await expect(page.locator('#probe-expr')).toHaveText('col');
+  await expect(page.locator('#probe-message')).toHaveText('');
+  await page.locator('#inspect').click();
+
+  await page.locator('#view').click();
+  await expect(page.locator('#dbg-check')).toHaveText('GPU ✓ agrees');
+  await expect(page.locator('#dbg-now')).toContainText('mainImage(');
+
+  // Export opens on the Shadertoy tab; p5 is one click away.
+  await page.locator('#export').click();
+  await expect(page.locator('#export-target .active')).toHaveText('Shadertoy');
+  await expect(page.locator('#export-code')).toContainText('void mainImage(');
+  await page.locator('#export-target [data-target="p5"]').click();
+  await expect(page.locator('#export-code')).toContainText('uniform float u_time;');
+});
+
+test('Shadertoy toggle: a lesson shows as mainImage and still passes', async ({ page }) => {
+  const id = '02-color/03-mix';
+  await page.goto('/');
+  await openExercise(page, id);
+  await page.locator('#style-select').selectOption('shadertoy');
+  const code = await page.evaluate(() => window.__sd.editor.view.state.doc.toString());
+  expect(code).toContain('void mainImage(out vec4 fragColor, in vec2 fragCoord)');
+  expect(code).not.toContain('u_resolution');
+  const toy = await page.evaluate(async (src) => {
+    const url = '/src/dialects/convert.ts'; // served by Vite
+    const { convertStyle } = (await import(/* @vite-ignore */ url)) as { convertStyle(s: string, to: string): string };
+    return convertStyle(src, 'shadertoy');
+  }, lessonFile(id, 'reference.glsl'));
+  await setCode(page, toy);
+  await expect(page.locator('.checks-banner')).toContainText('Exercise complete');
+});
+
+test("language dropdown: code that can't be converted keeps its language, and says why", async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#mode-switch [data-mode="sandbox"]').click();
+  await setCode(page, 'out vec4 c;\nvoid main() { c = vec4(1.0) }'); // missing ;
+  let message = '';
+  page.once('dialog', (d) => {
+    message = d.message();
+    void d.accept();
+  });
+  await page.locator('#style-select').selectOption('shadertoy');
+  await expect.poll(() => message).toContain("Can't switch styles");
+  await expect(page.locator('#style-select')).toHaveValue('es300');
+});
