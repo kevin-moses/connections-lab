@@ -3,7 +3,7 @@ import type { ShaderRunner } from '../render/runner';
 import type { ShaderEditor } from '../editor/editor';
 import { resolveProbeTarget, type ProbeTarget } from './target';
 import { buildProbeShader, KIND_NAMES } from './rewrite';
-import type { Channel, PixelSample, ProbeStats, VizMode } from './probeLayer';
+import { ProbeLayer, type Channel, type PixelSample, type ProbeStats, type VizMode } from './probeLayer';
 
 export interface InspectorUI {
   toggle: HTMLButtonElement;
@@ -37,27 +37,31 @@ export class Inspector {
   private hover: [number, number] | null = null;
   private stats: ProbeStats | null = null;
   private iterOptionsFor = -1;
+  private readonly layer: ProbeLayer;
 
+  /** Throws if the GPU can't render float textures (value-as-image needs them). */
   constructor(
     private readonly runner: ShaderRunner,
     private readonly editor: ShaderEditor,
     private readonly ui: InspectorUI,
   ) {
+    this.layer = new ProbeLayer(runner.pass);
+    runner.overlay = this.layer;
     ui.toggle.addEventListener('click', () => this.setEnabled(!this.enabled));
 
     ui.modeSeg.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]');
       if (!btn) return;
-      this.runner.probe.setView({ mode: btn.dataset.mode as VizMode });
+      this.layer.setView({ mode: btn.dataset.mode as VizMode });
       this.syncControls();
     });
     ui.channelSeg.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-channel]');
       if (!btn || btn.disabled) return;
-      this.runner.probe.setView({ channel: Number(btn.dataset.channel) as Channel });
+      this.layer.setView({ channel: Number(btn.dataset.channel) as Channel });
       this.syncControls();
     });
-    const pickIteration = () => this.runner.probe.setView({ iteration: Number(ui.iter.value) });
+    const pickIteration = () => this.layer.setView({ iteration: Number(ui.iter.value) });
     ui.iter.addEventListener('change', pickIteration);
     ui.iter.addEventListener('input', pickIteration);
 
@@ -70,8 +74,8 @@ export class Inspector {
       ui.readout.hidden = true;
     });
 
-    runner.probe.onStats = (s) => this.onStats(s);
-    runner.afterDraw = () => this.updateReadout();
+    this.layer.statsChanged.on((s) => this.onStats(s));
+    runner.frame.on(() => this.updateReadout());
   }
 
   setEnabled(on: boolean): void {
@@ -84,7 +88,7 @@ export class Inspector {
     } else {
       this.target = null;
       this.compiledCode = null;
-      this.runner.clearProbe();
+      this.layer.setProgram(null);
       this.editor.showProbe(null);
       this.ui.readout.hidden = true;
     }
@@ -121,18 +125,19 @@ export class Inspector {
     }
     if (built.code === this.compiledCode) return; // nothing changed
 
-    const result = this.runner.compileProbe(built.code);
+    const result = this.runner.buildProgram(built.code);
     if (!result.ok) {
       const first = result.diagnostics[0]?.message ?? 'unknown error';
       this.say(`Can't show ${target.label} as an image: ${first}`);
       return;
     }
+    this.layer.setProgram(result.program);
 
     const changedTarget = this.target?.expr !== target.expr || this.target?.line !== target.line;
     this.target = target;
     this.compiledCode = built.code;
     if (changedTarget) {
-      this.runner.probe.setView({ iteration: 0, channel: -1 });
+      this.layer.setView({ iteration: 0, channel: -1 });
       this.iterOptionsFor = -1;
     }
     this.editor.showProbe({ line: target.line, exprRange: target.exprRange });
@@ -160,7 +165,7 @@ export class Inspector {
     this.ui.iterWrap.hidden = n <= 1;
     if (n === this.iterOptionsFor) return;
     this.iterOptionsFor = n;
-    const current = this.runner.probe.view.iteration;
+    const current = this.layer.view.iteration;
     const options = [`<option value="0">last</option>`];
     for (let i = 1; i <= n; i++) options.push(`<option value="${i}">${i}</option>`);
     this.ui.iter.innerHTML = options.join('');
@@ -168,7 +173,7 @@ export class Inspector {
   }
 
   private syncControls(): void {
-    const view = this.runner.probe.view;
+    const view = this.layer.view;
     const dim = this.stats?.dim || 4;
     for (const b of this.ui.modeSeg.querySelectorAll<HTMLButtonElement>('button')) {
       b.classList.toggle('active', b.dataset.mode === view.mode);
@@ -183,7 +188,7 @@ export class Inspector {
   }
 
   private renderLegend(): void {
-    const view = this.runner.probe.view;
+    const view = this.layer.view;
     const s = this.stats;
     const unreached = `<span class="legend-item"><span class="swatch unreached"></span>not reached</span>`;
     let html = '';
@@ -202,16 +207,16 @@ export class Inspector {
 
   private updateReadout(): void {
     const tip = this.ui.readout;
-    if (!this.enabled || !this.hover || !this.target || !this.runner.probe.active) {
+    if (!this.enabled || !this.hover || !this.target || !this.layer.active) {
       tip.hidden = true;
       return;
     }
-    const sample = this.runner.probe.sample(this.hover[0], this.hover[1]);
+    const sample = this.layer.sample(this.hover[0], this.hover[1]);
     if (!sample) {
       tip.hidden = true;
       return;
     }
-    tip.innerHTML = readoutHtml(this.target.label, sample, this.runner.probe.view.iteration);
+    tip.innerHTML = readoutHtml(this.target.label, sample, this.layer.view.iteration);
     tip.hidden = false;
   }
 

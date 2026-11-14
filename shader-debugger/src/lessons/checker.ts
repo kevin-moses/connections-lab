@@ -3,24 +3,10 @@ import { traceCall } from '../interp/interpreter';
 import { formatValue } from '../interp/values';
 import { DEFAULT_VARIANT, type Channel, type Exercise, type ImageCheck, type TestSpec, type Variant } from './types';
 
-/** RGBA bytes, row 0 = bottom (like gl.readPixels and gl_FragCoord). */
-export interface Image {
-  width: number;
-  height: number;
-  data: Uint8ClampedArray;
-}
+import { Lru } from '../../shared/lru';
+import type { Image, Renderer, RenderResult } from '../render/types';
 
-export interface RenderRequest {
-  source: string;
-  width: number;
-  height: number;
-  time: number;
-  /** Pixels, origin bottom-left. */
-  mouse: [number, number];
-}
-
-export type RenderResult = { ok: true; image: Image } | { ok: false; error: string };
-export type Renderer = (req: RenderRequest) => RenderResult;
+export type { Image, Renderer, RenderRequest, RenderResult } from '../render/types';
 
 export interface CheckItem {
   kind: 'compile' | 'image' | TestSpec['type'];
@@ -53,11 +39,19 @@ export function describeVariant(v: Required<Variant>, all: Required<Variant>[]):
 }
 
 /** Run every check for an exercise against the learner's source. */
+/**
+ * Reference renders per renderer: the reference never changes, so it's drawn
+ * once per exercise and variant instead of on every check (every edit).
+ */
+const referenceRenders = new WeakMap<Renderer, Lru<RenderResult>>();
+
 export function checkExercise(ex: Exercise, source: string, render: Renderer): CheckReport {
   const cache = new Map<string, RenderResult>();
-  const renderVariant = (src: string, v: Required<Variant>) => {
+  let references = referenceRenders.get(render);
+  if (!references) referenceRenders.set(render, (references = new Lru<RenderResult>(32)));
+  const renderVariant = (src: string, v: Required<Variant>, keep: Lru<RenderResult> | Map<string, RenderResult> = cache) => {
     const key = `${src.length}:${hash(src)}|${v.size}|${v.time}|${v.mouse}`;
-    let r = cache.get(key);
+    let r = keep.get(key);
     if (!r) {
       r = render({
         source: src,
@@ -66,7 +60,7 @@ export function checkExercise(ex: Exercise, source: string, render: Renderer): C
         time: v.time,
         mouse: [v.mouse[0] * v.size[0], v.mouse[1] * v.size[1]],
       });
-      cache.set(key, r);
+      keep.set(key, r);
     }
     return r;
   };
@@ -87,7 +81,7 @@ export function checkExercise(ex: Exercise, source: string, render: Renderer): C
     let worst = 1;
     for (const v of variants) {
       const yours = renderVariant(source, v);
-      const target = renderVariant(ex.reference, v);
+      const target = renderVariant(ex.reference, v, references);
       if (!yours.ok || !target.ok) {
         failed = { kind: 'image', label: 'Matches the target', passed: false, detail: yours.ok ? `Reference failed: ${(target as { error: string }).error}` : (yours as { error: string }).error };
         break;

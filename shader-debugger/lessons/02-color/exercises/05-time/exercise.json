@@ -2,55 +2,31 @@
   "title": "Animate with time",
   "animated": true,
   "variants": [
-    {
-      "size": [
-        16,
-        16
-      ],
-      "time": 0.0
-    },
-    {
-      "time": 1.0
-    },
-    {
-      "time": 2.5
-    },
-    {
-      "time": 4.0
-    },
-    {
-      "time": 5.5
-    }
+    { "size": [64, 16], "time": 0.0 },
+    { "time": 1.0 },
+    { "time": 2.5 },
+    { "time": 4.0 }
   ],
   "tests": [
     {
       "type": "pixel",
-      "label": "At u_time = 4 the red is dim but not black",
-      "at": [
-        0.5,
-        0.5
-      ],
-      "expect": [
-        0.121,
-        null,
-        null
-      ],
-      "tol": 0.02,
-      "variant": {
-        "time": 4.0
-      }
+      "label": "At u_time = 2.5 the warm stripe from x ≈ 0.08 has moved to x ≈ 0.33",
+      "at": [0.3285, 0.5],
+      "expect": [1.0, 0.6, 0.2],
+      "tol": 0.03,
+      "variant": { "time": 2.5 }
     }
   ],
   "predict": {
-    "question": "At **u_time = 4 seconds**, `sin(4.0)` \u2248 \u22120.76. What will the **red** value on screen be?",
-    "at": [
-      0.5,
-      0.5
+    "question": "Once the stripes slide right at 0.1 per second, what does the middle pixel (x = 0.5) show at **u_time = 2**? The color the starter shows at…",
+    "at": [0.5, 0.5],
+    "expr": "uv.x - 0.1 * 2.0",
+    "kind": "choice",
+    "choices": [
+      { "label": "x = 0.3", "value": 0.3 },
+      { "label": "x = 0.5", "value": 0.5 },
+      { "label": "x = 0.7", "value": 0.7 }
     ],
-    "expr": "clamp(pulse, 0.0, 1.0)",
-    "kind": "number",
-    "tolerance": 0.02,
-    "time": 4.0,
-    "explain": "**0.** sin spends half its time below zero, and the screen clamps all of it to black. That's why the starter sits dark for about 3 seconds out of every 6.3."
+    "explain": "**x = 0.3.** Everything moved right by 0.2, so what's in the middle now used to be 0.2 to its *left*. Each pixel has to look up the pattern at a smaller x than its own."
   }
 }

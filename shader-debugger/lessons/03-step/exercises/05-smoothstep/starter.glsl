@@ -1,8 +1,6 @@
 precision highp float;
 
-uniform vec2  u_resolution;  // canvas size in pixels
-uniform float u_time;        // seconds since start
-uniform vec2  u_mouse;       // mouse position in pixels
+uniform vec2 u_resolution;  // canvas size in pixels
 
 out vec4 fragColor;
 

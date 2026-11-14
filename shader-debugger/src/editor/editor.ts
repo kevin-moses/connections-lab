@@ -6,6 +6,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint';
 import { tags as t } from '@lezer/highlight';
 import { glsl } from './glslLanguage';
+import { glslReference } from './reference';
 import type { ShaderDiagnostic } from '../glsl/diagnostics';
 
 const theme = EditorView.theme(
@@ -29,6 +30,11 @@ const theme = EditorView.theme(
       border: '1px solid var(--border)',
       color: 'var(--text)',
     },
+    '.cm-glsl-doc': { maxWidth: '360px', padding: '6px 8px', fontSize: '12.5px', lineHeight: '1.45', display: 'grid', gap: '4px' },
+    '.cm-glsl-sig': { fontFamily: 'var(--font-mono)', color: 'var(--syn-type)', whiteSpace: 'pre-wrap' },
+    '.cm-glsl-example': { fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' },
+    '.cm-glsl-note': { color: 'var(--warn)' },
+    '.cm-glsl-doc a': { color: 'var(--accent)', justifySelf: 'start' },
     '.cm-diagnostic-error': { borderLeftColor: 'var(--error)' },
     '.cm-probe-line': { backgroundColor: 'var(--probe-line)', boxShadow: 'inset 2px 0 0 var(--accent)' },
     '.cm-probe-expr': {
@@ -204,6 +210,7 @@ export function createEditor(
     basicSetup,
     keymap.of([indentWithTab]),
     glsl,
+    glslReference(),
     syntaxHighlighting(highlight),
     theme,
     lintGutter(),

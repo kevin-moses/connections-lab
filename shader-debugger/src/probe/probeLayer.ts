@@ -1,4 +1,7 @@
 import { compileShader, linkProgram, setCanonicalUniforms, uniformLocations, type CanonicalUniforms } from '../render/gl';
+import type { FullscreenPass } from '../render/fullscreen';
+import type { Overlay } from '../render/runner';
+import { Emitter } from '../events';
 import { PROBE_ITER_UNIFORM } from './rewrite';
 import { VISUALIZE_FS } from './visualize';
 
@@ -58,7 +61,7 @@ interface Target {
  * visualization. Also reads back single pixels (hover) and a downsampled
  * grid (auto range, loop counts).
  */
-export class ProbeLayer {
+export class ProbeLayer implements Overlay {
   private program: WebGLProgram | null = null;
   private readonly display: WebGLProgram;
   private full: Target | null = null;
@@ -68,13 +71,17 @@ export class ProbeLayer {
 
   view: ProbeView = { mode: 'raw', channel: -1, iteration: 0 };
   stats: ProbeStats | null = null;
-  onStats: ((s: ProbeStats) => void) | null = null;
+  /** New stats after a readback (auto range, loop counts). */
+  readonly statsChanged = new Emitter<ProbeStats>();
 
-  constructor(
-    private readonly gl: WebGL2RenderingContext,
-    private readonly vao: WebGLVertexArrayObject,
-    vs: WebGLShader,
-  ) {
+  private readonly gl: WebGL2RenderingContext;
+  private readonly vao: WebGLVertexArrayObject;
+
+  /** Draws on `pass`'s context, which must be the runner's. */
+  constructor(pass: FullscreenPass) {
+    const gl = (this.gl = pass.gl);
+    this.vao = pass.vao;
+    const vs = pass.vertexShaders['300 es'];
     if (!gl.getExtension('EXT_color_buffer_float')) {
       throw new Error('This GPU/browser cannot render to float textures (EXT_color_buffer_float).');
     }
@@ -93,15 +100,15 @@ export class ProbeLayer {
   setProgram(program: WebGLProgram | null): void {
     if (this.program && this.program !== program) this.gl.deleteProgram(this.program);
     this.program = program;
-    this.invalidateStats();
+    this.invalidate();
   }
 
   setView(view: Partial<ProbeView>): void {
     this.view = { ...this.view, ...view };
-    this.invalidateStats();
+    this.invalidate();
   }
 
-  invalidateStats(): void {
+  invalidate(): void {
     this.statsDirty = true;
   }
 
@@ -128,7 +135,7 @@ export class ProbeLayer {
       this.stats = this.computeStats();
       this.lastStatsAt = now;
       this.statsDirty = false;
-      if (this.stats) this.onStats?.(this.stats);
+      if (this.stats) this.statsChanged.emit(this.stats);
     }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);

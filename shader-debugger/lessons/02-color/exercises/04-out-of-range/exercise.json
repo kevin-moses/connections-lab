@@ -2,51 +2,31 @@
   "title": "Out of range",
   "tests": [
     {
-      "type": "increasing",
-      "label": "Brightness rises steadily from left to right",
+      "type": "region",
+      "label": "Red never drops below deep's 0.1 (nothing is clamped)",
+      "rect": [0, 0, 1, 1],
       "channel": "r",
-      "axis": "x",
-      "at": 0.5,
-      "rise": 0.9
+      "min": 0.09
     },
     {
       "type": "pixel",
-      "label": "A quarter of the way across is dark gray (0.25), not black",
-      "at": [
-        0.25,
-        0.5
-      ],
-      "expect": [
-        0.25,
-        0.25,
-        0.25
-      ],
+      "label": "Where the wave is lowest (x ≈ 0.24), the color is exactly deep",
+      "at": [0.2356, 0.5],
+      "expect": [0.1, 0.2, 0.6],
       "tol": 0.03
     }
   ],
   "predict": {
-    "question": "`v` runs from \u22121 on the left to +1 on the right. At the pixel **a quarter of the way across**, v \u2248 \u22120.5. What does the screen show there?",
-    "at": [
-      0.25,
-      0.5
-    ],
-    "expr": "fragColor.r",
+    "question": "At **x ≈ 0.24**, `wave` is −1, so the starter runs `mix(deep, warm, -1.0)`. What color does the screen show there?",
+    "at": [0.2356, 0.5],
+    "expr": "col",
     "kind": "choice",
     "clamp": true,
     "choices": [
-      {
-        "label": "Black (0)",
-        "value": 0
-      },
-      {
-        "label": "Dark gray (0.25)",
-        "value": 0.25
-      },
-      {
-        "label": "Mid gray (0.5)",
-        "value": 0.5
-      }
+      { "label": "Deep blue (0.1, 0.2, 0.6)", "value": [0.1, 0.2, 0.6] },
+      { "label": "Black (0, 0, 0)", "value": [0, 0, 0] },
+      { "label": "Pure blue (0, 0, 1)", "value": [0, 0, 1] }
     ],
-    "explain": "**Black.** The GPU clamps \u22120.5 to 0. The whole left half is \"too dark to show\". Inspect `v` to see that half hatched."
+    "explain": "**Pure blue.** `mix` with t = −1 goes as far *past* `deep` as `warm` is on the other side: deep − (warm − deep) = (−0.8, −0.2, 1.0). The screen clamps that to (0, 0, 1). Inspect `col` to see those stripes hatched."
   }
 }

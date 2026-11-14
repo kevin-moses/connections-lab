@@ -2,8 +2,9 @@ import type { Program } from '@shaderfrog/glsl-parser/ast';
 import type { ShaderRunner } from '../render/runner';
 import type { CanonicalUniforms } from '../render/gl';
 import type { ShaderEditor } from '../editor/editor';
+import type { TraceSnapshot } from '../../shared/tutor';
 import { traceCall, traceFragment, type TraceResult, type TraceStep, type VarSnap } from '../interp/interpreter';
-import { crossCheck, type CrossCheck } from '../interp/crossCheck';
+import { crossCheck, type CrossCheck } from './crossCheck';
 import { formatNumber, formatValue, isArrayValue, valueTypeName, type AnyValue } from '../interp/values';
 import {
   alignStep,
@@ -100,6 +101,21 @@ export class Debugger {
 
   get active(): boolean {
     return this.a !== null;
+  }
+
+  /** The current step of pixel A, formatted for the tutor. */
+  snapshot(): TraceSnapshot | null {
+    const a = this.a;
+    const step = a?.trace.steps[this.cur];
+    if (!a || !step) return null;
+    return {
+      pixel: a.pixel,
+      call: a.call,
+      line: step.line,
+      step: step.text,
+      vars: [...step.locals, ...step.globals].map((v) => ({ name: v.name, value: formatValue(v.value) })),
+      output: a.trace.output ? formatValue(a.trace.output.value) : null,
+    };
   }
 
   /** New source: re-run the picked pixels so values follow your edits. */

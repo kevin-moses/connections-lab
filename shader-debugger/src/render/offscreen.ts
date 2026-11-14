@@ -1,9 +1,6 @@
-import { prepareFragmentSource, type GlslVersion } from '../glsl/prepare';
-import { parseInfoLog } from '../glsl/diagnostics';
-import { compileShader, linkProgram, setCanonicalUniforms, FULLSCREEN_VS_100, FULLSCREEN_VS_300 } from './gl';
-import type { Image, RenderRequest, RenderResult } from '../lessons/checker';
+import { FullscreenPass } from './fullscreen';
+import type { Image, RenderRequest, RenderResult } from './types';
 
-const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 3, -1, -1, 3]);
 const CACHE_SIZE = 12;
 
 /**
@@ -13,8 +10,7 @@ const CACHE_SIZE = 12;
  */
 export class OffscreenRenderer {
   private readonly gl: WebGL2RenderingContext;
-  private readonly vs: Record<GlslVersion, WebGLShader>;
-  private readonly vao: WebGLVertexArrayObject;
+  private readonly pass: FullscreenPass;
   private readonly programs = new Map<string, { program: WebGLProgram } | { error: string }>();
   private target: { fbo: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number } | null = null;
 
@@ -24,18 +20,7 @@ export class OffscreenRenderer {
     const gl = canvas.getContext('webgl2', { antialias: false });
     if (!gl) throw new Error('WebGL2 is not available.');
     this.gl = gl;
-    const vs = (code: string) => {
-      const r = compileShader(gl, gl.VERTEX_SHADER, code);
-      if (!r.ok) throw new Error(r.log);
-      return r.value;
-    };
-    this.vs = { '300 es': vs(FULLSCREEN_VS_300), '100': vs(FULLSCREEN_VS_100) };
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ARRAY_BUFFER, FULLSCREEN_TRIANGLE, gl.STATIC_DRAW);
-    this.vao = gl.createVertexArray()!;
-    gl.bindVertexArray(this.vao);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    this.pass = new FullscreenPass(gl);
   }
 
   /** Arrow function so it can be passed around as a `Renderer`. */
@@ -49,10 +34,7 @@ export class OffscreenRenderer {
     gl.viewport(0, 0, req.width, req.height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(prog.program);
-    gl.bindVertexArray(this.vao);
-    setCanonicalUniforms(gl, prog.program, { resolution: [req.width, req.height], time: req.time, mouse: req.mouse });
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    this.pass.draw(prog.program, { resolution: [req.width, req.height], time: req.time, mouse: req.mouse });
     const data = new Uint8ClampedArray(req.width * req.height * 4);
     gl.readPixels(0, 0, req.width, req.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -68,15 +50,12 @@ export class OffscreenRenderer {
       return hit;
     }
     const gl = this.gl;
-    const prepared = prepareFragmentSource(source);
+    const built = this.pass.build(source);
     let entry: { program: WebGLProgram } | { error: string };
-    const fs = compileShader(gl, gl.FRAGMENT_SHADER, prepared.code);
-    if (!fs.ok) {
-      const d = parseInfoLog(fs.log, prepared.map, source)[0];
+    if (built.ok) entry = { program: built.program };
+    else {
+      const d = built.diagnostics[0];
       entry = { error: d ? `${d.line ? `Line ${d.line}: ` : ''}${d.message}` : 'Compile error' };
-    } else {
-      const linked = linkProgram(gl, this.vs[prepared.version], fs.value);
-      entry = linked.ok ? { program: linked.value } : { error: linked.log };
     }
     this.programs.set(source, entry);
     if (this.programs.size > CACHE_SIZE) {

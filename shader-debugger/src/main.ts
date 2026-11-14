@@ -1,9 +1,11 @@
 import './style.css';
 import { createEditor } from './editor/editor';
-import { ShaderRunner } from './render/runner';
-import { parseGlsl } from './glsl/parse';
+import type { Program } from '@shaderfrog/glsl-parser/ast';
+import { parseGlsl, type ParseResult } from './glsl/parse';
 import type { ShaderDiagnostic } from './glsl/diagnostics';
-import type { TutorHealth } from '../shared/tutor';
+import { ShaderRunner, type CompileResult } from './render/runner';
+import { Emitter } from './events';
+import type { CodeContext } from '../shared/tutor';
 import { DEFAULT_SHADER } from './defaultShader';
 import { Inspector } from './probe/inspector';
 import { Debugger } from './debugger/debugger';
@@ -11,6 +13,7 @@ import { LESSONS } from './lessons/content';
 import { LessonController } from './lessons/lessonView';
 import { loadProgress, saveProgress } from './lessons/progress';
 import { OffscreenRenderer } from './render/offscreen';
+import { addErrorExplainer } from './tutor/errorExplainer';
 
 const STORAGE_KEY = 'shader-debugger:sandbox:v1';
 const COMPILE_DEBOUNCE_MS = 200;
@@ -30,7 +33,6 @@ const ui = {
   fps: $('fps'),
   statusCompile: $('status-compile'),
   statusAst: $('status-ast'),
-  statusTutor: $('status-tutor'),
   problems: $<HTMLUListElement>('problems'),
   problemCount: $('problem-count'),
   inspect: $<HTMLButtonElement>('inspect'),
@@ -90,6 +92,7 @@ function renderProblems(diags: ShaderDiagnostic[], onPick: (line: number) => voi
     msg.textContent = d.message;
     li.append(dot, where, msg);
     if (d.line !== null) li.addEventListener('click', () => onPick(d.line!));
+    if (d.severity === 'error') addErrorExplainer(li, msg, d, tutorContext);
     ui.problems.append(li);
   }
 }
@@ -110,13 +113,40 @@ let cursorTimer = 0;
 let inspector: Inspector | null = null;
 let debug: Debugger | null = null;
 let lessons: LessonController | null = null;
+let lastDiagnostics: ShaderDiagnostic[] = [];
 const progress = loadProgress();
+
+/** One compile of the editor's code: what every view updates from. */
+interface Compiled {
+  source: string;
+  parsed: ParseResult;
+  gpu: CompileResult;
+  /** The AST when both the parser and the GPU accepted the code (probes need both). */
+  ast: Program | null;
+}
+const compiled = new Emitter<Compiled>();
+
+/** The lesson controller, while lesson mode is on (the one place that decides who owns the editor's code). */
+function activeLessons(): LessonController | null {
+  return progress.mode === 'lessons' ? lessons : null;
+}
+
+/** What every tutor request carries. Hints (lessonView) add the checks and the stepper's state. */
+function tutorContext(): CodeContext {
+  return {
+    code: editor.getSource(),
+    cursorLine: editor.cursorLine(),
+    exerciseId: activeLessons()?.current.id,
+    errors: lastDiagnostics.filter((d) => d.severity === 'error').map((d) => ({ line: d.line, message: d.message })),
+  };
+}
 
 const editor = createEditor(
   ui.editor,
   '',
   (source) => {
-    if (progress.mode === 'lessons' && lessons) lessons.saveCode(source);
+    const owner = activeLessons();
+    if (owner) owner.saveCode(source);
     else saveSource(source);
     clearTimeout(compileTimer);
     compileTimer = window.setTimeout(() => compile(source), COMPILE_DEBOUNCE_MS);
@@ -128,22 +158,28 @@ const editor = createEditor(
 );
 
 if (runner) {
-  inspector = new Inspector(runner, editor, {
-    toggle: ui.inspect,
-    bar: $('probe-bar'),
-    expr: $('probe-expr'),
-    type: $('probe-type'),
-    where: $('probe-where'),
-    modeSeg: $('mode-seg'),
-    channelSeg: $('channel-seg'),
-    iterWrap: $('iter-wrap'),
-    iter: $<HTMLSelectElement>('iter'),
-    legend: $('probe-legend'),
-    message: $('probe-message'),
-    readout: $('readout'),
-    canvas: ui.canvas,
-    canvasWrap: ui.canvas.parentElement!,
-  });
+  try {
+    inspector = new Inspector(runner, editor, {
+      toggle: ui.inspect,
+      bar: $('probe-bar'),
+      expr: $('probe-expr'),
+      type: $('probe-type'),
+      where: $('probe-where'),
+      modeSeg: $('mode-seg'),
+      channelSeg: $('channel-seg'),
+      iterWrap: $('iter-wrap'),
+      iter: $<HTMLSelectElement>('iter'),
+      legend: $('probe-legend'),
+      message: $('probe-message'),
+      readout: $('readout'),
+      canvas: ui.canvas,
+      canvasWrap: ui.canvas.parentElement!,
+    });
+  } catch (err) {
+    // Value-as-image needs float render targets; everything else still works.
+    ui.inspect.disabled = true;
+    ui.inspect.title = (err as Error).message;
+  }
   debug = new Debugger(runner, editor, {
     bottom: $('bottom'),
     tabDebug: $<HTMLButtonElement>('tab-debug'),
@@ -183,6 +219,7 @@ if (runner) {
       reset: $<HTMLButtonElement>('ex-reset'),
     },
     loadCode,
+    tutorContext,
   });
 } else {
   ui.inspect.disabled = true;
@@ -242,43 +279,51 @@ function fitCanvas() {
 new ResizeObserver(fitCanvas).observe(ui.canvas.parentElement!);
 
 function compile(source: string) {
-  const parsed = parseGlsl(source);
-
   if (!runner) return;
-  const result = runner.compile(source);
+  const parsed = parseGlsl(source);
+  const gpu = runner.compile(source);
+  compiled.emit({
+    source,
+    parsed,
+    gpu,
+    ast: parsed.ok && gpu.ok ? parsed.ast : null,
+  });
+}
 
-  if (result.ok) {
-    setPill(ui.statusCompile, `GPU ✓ ${result.ms.toFixed(0)}ms`, 'ok', 'Compiled and linked');
+compiled.on(({ parsed, gpu }) => {
+  if (gpu.ok) {
+    setPill(ui.statusCompile, `GPU ✓ ${gpu.ms.toFixed(0)}ms`, 'ok', 'Compiled and linked');
   } else {
-    const n = result.diagnostics.filter((d) => d.severity === 'error').length;
+    const n = gpu.diagnostics.filter((d) => d.severity === 'error').length;
     setPill(ui.statusCompile, `GPU ✗ ${n} error${n === 1 ? '' : 's'}`, 'error', 'Showing the last shader that compiled');
   }
-
   // The debugger needs an AST. If the GPU accepts code our parser rejects,
   // flag it: that's a parser gap, not the learner's mistake.
   if (parsed.ok) {
     setPill(ui.statusAst, `AST ✓ ${parsed.ms.toFixed(1)}ms`, 'ok', 'Debugger parser understood this shader');
-  } else if (result.ok) {
+  } else if (gpu.ok) {
     setPill(ui.statusAst, 'AST ✗', 'warn', `Debugger parser gap (GPU accepted it): ${parsed.diagnostic.message}`);
   } else {
     setPill(ui.statusAst, 'AST ✗', 'idle', parsed.diagnostic.message);
   }
-
-  editor.showDiagnostics(result.diagnostics);
-  renderProblems(result.diagnostics, (line) => editor.jumpToLine(line));
-  inspector?.setSource(source, parsed.ok && result.ok ? parsed.ast : null);
-  debug?.setSource(parsed.ok ? parsed.ast : null, result.ok);
+  lastDiagnostics = gpu.diagnostics;
+  editor.showDiagnostics(gpu.diagnostics);
+  renderProblems(gpu.diagnostics, (line) => editor.jumpToLine(line));
+});
+compiled.on(({ source, ast }) => inspector?.setSource(source, ast));
+compiled.on(({ parsed, gpu }) => {
+  debug?.setSource(parsed.ok ? parsed.ast : null, gpu.ok);
   // New errors while not debugging: bring the Problems tab forward.
-  if (!result.ok && !debug?.active) debug?.showTab('problems');
-  if (progress.mode === 'lessons') lessons?.onCompiled(source, parsed.ok && result.ok ? parsed.ast : null);
-}
+  if (!gpu.ok && !debug?.active) debug?.showTab('problems');
+});
+compiled.on(({ source, ast }) => activeLessons()?.onCompiled(source, ast));
 
 setMode(progress.mode);
 
 if (runner) {
   const r = runner;
   let lastReadout = 0;
-  r.onFrame = (info) => {
+  r.frame.on((info) => {
     lessons?.onFrame();
     const now = performance.now();
     if (now - lastReadout < 100) return;
@@ -286,7 +331,7 @@ if (runner) {
     ui.time.textContent = info.time.toFixed(2);
     ui.res.textContent = `${info.width}×${info.height}`;
     ui.fps.textContent = info.fps ? info.fps.toFixed(0) : '–';
-  };
+  });
   r.start();
 
   ui.play.addEventListener('click', () => {
@@ -299,19 +344,19 @@ if (runner) {
 
 ui.resetCode.addEventListener('click', () => {
   const view = editor.view;
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: DEFAULT_SHADER } });
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: DEFAULT_SHADER },
+  });
 });
-
-// ---------- tutor proxy health ----------
-
-fetch('/api/health')
-  .then((r) => (r.ok ? (r.json() as Promise<TutorHealth>) : Promise.reject(r.status)))
-  .then((h) =>
-    setPill(ui.statusTutor, `Tutor: ${h.provider}`, h.live ? 'ok' : 'idle', h.live ? 'Tutor connected' : 'Proxy up; model not connected until M4'),
-  )
-  .catch(() => setPill(ui.statusTutor, 'Tutor offline', 'warn', 'Start the API with `npm run dev`'));
 
 // Dev-only handle for poking at the app from the browser console / tests.
 if (import.meta.env.DEV) {
-  (window as unknown as { __sd: unknown }).__sd = { editor, lessons, runner, debug, progress };
+  (window as unknown as { __sd: unknown }).__sd = {
+    editor,
+    lessons,
+    runner,
+    debug,
+    progress,
+    tutorContext,
+  };
 }

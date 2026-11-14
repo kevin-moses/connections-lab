@@ -1,7 +1,7 @@
 import { ShaderRunner } from './render/runner';
 import { parseGlsl } from './glsl/parse';
 import { traceFragment } from './interp/interpreter';
-import { crossCheck } from './interp/crossCheck';
+import { crossCheck } from './debugger/crossCheck';
 import { CORPUS } from './interp/corpus';
 
 const W = 320;

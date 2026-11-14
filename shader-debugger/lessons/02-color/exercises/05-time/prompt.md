@@ -1,7 +1,11 @@
 ## Animate with time
 
-`u_time` counts seconds since the shader started, and it's the shader version of p5's `millis() / 1000`. `sin(u_time)` swings smoothly between −1 and 1, once every 2π ≈ 6.3 seconds.
+`u_time` counts seconds since the shader started. It's the shader version of p5's `millis() / 1000`.
 
-The starter uses it directly as red, so the pulse spends half its time below zero, stuck at black.
+Like `u_resolution`, it's a **uniform**: a value the app hands to every pixel. The app always sends it, but a shader only sees the uniforms it declares, and the starter doesn't declare this one yet. Add it under `u_resolution`:
 
-Remap the pulse so red swings smoothly between **0 and 1** instead. The checker looks at several moments in time.
+```glsl
+uniform float u_time;  // seconds since start
+```
+
+Then make the stripes from the last exercise **slide to the right** by a tenth of the canvas width every second. At `u_time = 2`, the picture should be the starter's picture moved right by 0.2. The checker looks at several moments in time.

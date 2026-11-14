@@ -7,7 +7,7 @@
  *     prompt.md                    instructions shown to the learner
  *     starter.glsl                 code the learner starts from
  *     reference.glsl               hidden solution (target image, never sent to the tutor)
- *     notes.md                     teacher notes for the tutor (key idea, common mistakes)
+ *     notes.md                     teacher notes, read only by the tutor server (never bundled)
  *
  * All shaders are in the canonical dialect (GLSL ES 3.00, u_resolution /
  * u_time / u_mouse, `out vec4 fragColor`).
@@ -91,7 +91,6 @@ export interface Exercise {
   prompt: string;
   starter: string;
   reference: string;
-  notes: string;
 }
 
 export interface Lesson {

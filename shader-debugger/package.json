@@ -4,14 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
+    "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"tsx watch --include .env --include 'lessons/**' server/index.ts\"",
     "dev:web": "vite",
-    "dev:api": "tsx watch server/index.ts",
+    "dev:api": "tsx watch --include .env --include 'lessons/**' server/index.ts",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.13.1",
@@ -27,6 +29,7 @@
     "marked": "^18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "concurrently": "^10.0.7",

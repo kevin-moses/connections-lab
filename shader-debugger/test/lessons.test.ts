@@ -1,8 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { LESSONS } from '../src/lessons/content';
 import { checkExercise, diffImages, type Image } from '../src/lessons/checker';
 import { cpuRenderer } from '../src/lessons/cpuRender';
-import { gradePrediction, runPrediction } from '../src/lessons/predict';
+import { answerFromLabel, revealPrediction, runPrediction } from '../src/lessons/predict';
 import { parseGlsl } from '../src/glsl/parse';
 import { DEFAULT_CANVAS } from '../src/lessons/types';
 
@@ -17,8 +18,8 @@ const PREDICTED: Record<string, number | string> = {
   '02-color/01-p5-colors': 'Yellow',
   '02-color/02-swizzle': 'Cyan (0, 1, 1)',
   '02-color/03-mix': 0.325,
-  '02-color/04-out-of-range': 'Black (0)',
-  '02-color/05-time': 0,
+  '02-color/04-out-of-range': 'Pure blue (0, 0, 1)',
+  '02-color/05-time': 'x = 0.3',
   '03-step/01-hard-edge': 0,
   '03-step/02-bands': 0,
   '03-step/03-rectangle': 0,
@@ -35,8 +36,13 @@ describe('lesson content', () => {
     ]);
     for (const ex of exercises) {
       expect(ex.prompt.length, ex.id).toBeGreaterThan(50);
-      expect(ex.notes.length, ex.id).toBeGreaterThan(50);
+      const notes = readFileSync(`lessons/${ex.id.replace('/', '/exercises/')}/notes.md`, 'utf8');
+      expect(notes.length, ex.id).toBeGreaterThan(50);
     }
+  });
+
+  it('keeps teacher notes out of the browser bundle', () => {
+    for (const ex of exercises) expect(ex, ex.id).not.toHaveProperty('notes');
   });
 
   describe.each(exercises.map((e) => [e.id, e] as const))('%s', (_id, ex) => {
@@ -54,23 +60,51 @@ describe('lesson content', () => {
     it('predict question resolves to what its explanation says', () => {
       const spec = ex.config.predict!;
       expect(spec, 'every exercise has a prediction').toBeDefined();
-      const parsed = parseGlsl(ex.starter);
-      if (!parsed.ok) throw new Error(parsed.diagnostic.message);
-      const run = runPrediction(spec, parsed.ast, ex.config.canvas ?? DEFAULT_CANVAS);
-      expect(run.error).toBeUndefined();
-      const expected = PREDICTED[ex.id];
-      if (spec.kind === 'number') {
-        expect(gradePrediction(spec, run.value!, expected as number).correct).toBe(true);
-      } else {
-        const idx = spec.choices!.findIndex((c) => c.label === expected);
-        expect(idx).toBeGreaterThanOrEqual(0);
-        expect(gradePrediction(spec, run.value!, idx).correct).toBe(true);
+      const answer = answerFromLabel(spec, String(PREDICTED[ex.id]));
+      expect(answer, 'expected answer is a valid choice').not.toBeNull();
+      const r = revealPrediction(ex, answer!);
+      expect(r).toMatchObject({ correct: true });
+    });
+
+    it('predict question gets the same answer once the exercise is solved', () => {
+      // Regression: grading used to run the learner's current code, so once
+      // they had written the line a question asked about, it was applied
+      // twice (1.3 reported -2.995 instead of -1). The question is about the
+      // starter; the finished solution must not change its answer.
+      const spec = ex.config.predict!;
+      const onStarter = runQuestion(ex.starter, ex);
+      const onSolution = runQuestion(ex.reference, ex);
+      const differs = onStarter.some((x, i) => Math.abs(x - onSolution[i]) > 1e-3);
+      const r = revealPrediction(ex, answerFromLabel(spec, String(PREDICTED[ex.id]))!);
+      expect(r).toMatchObject({ correct: true });
+      // For the questions where the solution would change the value, make
+      // sure grading really isn't using it.
+      if (differs && spec.kind === 'number') {
+        expect('actual' in r && Math.abs(Number(r.actual) - onSolution[0]) > 1e-3).toBe(true);
       }
     });
   });
 });
 
+/** Evaluate a question's expression on some code, the way the old grading did. */
+function runQuestion(code: string, ex: (typeof exercises)[number]): number[] {
+  const parsed = parseGlsl(code);
+  if (!parsed.ok) throw new Error(parsed.diagnostic.message);
+  return runPrediction(ex.config.predict!, parsed.ast, ex.config.canvas ?? DEFAULT_CANVAS).value ?? [];
+}
+
 describe('checker details', () => {
+  it('renders the reference once per variant, not on every check', () => {
+    const ex = exercises.find((e) => e.id === '03-step/03-rectangle')!;
+    const sources: string[] = [];
+    const counting: typeof cpuRenderer = (req) => (sources.push(req.source), cpuRenderer(req));
+    checkExercise(ex, ex.starter, counting);
+    const first = sources.filter((s) => s === ex.reference).length;
+    checkExercise(ex, ex.starter + '\n', counting);
+    expect(first).toBeGreaterThan(0);
+    expect(sources.filter((s) => s === ex.reference).length).toBe(first);
+  });
+
   const solid = (w: number, h: number, rgb: number[]): Image => {
     const data = new Uint8ClampedArray(w * h * 4);
     for (let i = 0; i < w * h; i++) data.set([...rgb, 255], i * 4);

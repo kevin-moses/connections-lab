@@ -4,9 +4,11 @@ import type { ShaderRunner } from '../render/runner';
 import type { Debugger } from '../debugger/debugger';
 import { paintImage, type OffscreenRenderer } from '../render/offscreen';
 import { checkExercise, type CheckItem, type CheckReport } from './checker';
-import { gradePrediction, runPrediction } from './predict';
+import { answerFromLabel, revealPrediction, type Reveal } from './predict';
 import { saveProgress, type Progress } from './progress';
 import { DEFAULT_CANVAS, type Exercise, type Lesson } from './types';
+import type { CheckSummary, CodeContext, HintLevel } from '../../shared/tutor';
+import { askTutor, tutorHtml, tutorInlineHtml } from '../tutor/client';
 
 export interface LessonUI {
   pane: HTMLElement;
@@ -27,9 +29,13 @@ export interface LessonDeps {
   ui: LessonUI;
   /** Put new code in the editor (and compile it). */
   loadCode(code: string): void;
+  /** What every tutor request carries: code, cursor, exercise, errors. Hints add checks and the stepper. */
+  tutorContext(): CodeContext;
 }
 
 const PREVIEW_WIDTH = 168;
+const MAX_HINTS = 6;
+const HINT_NAMES: Record<HintLevel, string> = { 1: 'Nudge', 2: 'Concept', 3: 'Steps' };
 const CHECK_DEBOUNCE_MS = 150;
 
 /**
@@ -44,6 +50,10 @@ export class LessonController {
   private checkTimer = 0;
   private previewCanvas: HTMLCanvasElement | null = null;
   private frameCount = 0;
+  /** Exercises with a hint request in flight (one at a time each). */
+  private readonly hintsPending = new Set<string>();
+  /** Redraws the current exercise's hint card. */
+  private redrawHints: ((error?: string) => void) | null = null;
 
   constructor(private readonly d: LessonDeps) {
     const all = d.lessons.flatMap((l) => l.exercises);
@@ -74,6 +84,11 @@ export class LessonController {
   /** The learner's code for the current exercise. */
   get code(): string {
     return this.state.code ?? this.exercise.starter;
+  }
+
+  /** Latest checklist, for the tutor. */
+  checkSummary(): CheckSummary[] | undefined {
+    return this.report?.items.map((i) => ({ label: i.label, passed: i.passed, detail: i.detail }));
   }
 
   private get state() {
@@ -179,6 +194,7 @@ export class LessonController {
     scroll.append(target);
 
     scroll.append(html(`<section class="card checks-card"><div class="card-title">Checks <span class="muted checks-summary"></span></div><div class="checks-banner" hidden></div><ul class="checks"></ul></section>`));
+    scroll.append(this.tutorCard());
     scroll.scrollTop = 0;
     this.frameCount = 0;
     this.onFrame();
@@ -266,30 +282,13 @@ export class LessonController {
     const input = card.querySelector('.predict-input')!;
     const result = card.querySelector<HTMLElement>('.predict-result')!;
 
-    const reveal = (answer: number, answerLabel: string) => {
-      if (!this.ast) {
-        result.innerHTML = `<p class="warn">Fix the errors in your code first.</p>`;
-        return;
-      }
-      const run = runPrediction(spec, this.ast, this.canvasSize);
-      if (!run.value) {
-        result.innerHTML = `<p class="warn">Couldn't run that pixel: ${esc(run.error ?? '')}</p>`;
-        return;
-      }
-      const g = gradePrediction(spec, run.value, answer);
-      const actual = spec.kind === 'choice' ? spec.choices![g.correctChoice!].label : g.actualText;
-      this.state.predicted = { answer: answerLabel, correct: g.correct, actual };
-      saveProgress(this.d.progress);
-      showResult();
-      // Step through the pixel the question was about.
-      this.d.debug.stepPixel(run.pixel, run.uniforms);
-    };
-
-    const showResult = () => {
-      const p = this.state.predicted;
-      if (!p) return;
+    const showResult = (said: string, r: Reveal) => {
       input.replaceChildren();
-      result.innerHTML = `<p class="${p.correct ? 'right' : 'wrong'}">${p.correct ? '✓ Right' : '✗ Not quite'}: you said <strong>${esc(p.answer)}</strong>, and it's <strong>${esc(p.actual)}</strong>.</p>${spec.explain ? md(spec.explain) : ''}`;
+      const edited = this.code.replace(/\s+/g, '') !== this.exercise.starter.replace(/\s+/g, '');
+      const note = edited
+        ? `<p class="muted predict-note">Graded on the starter code, so your edits don't change the answer.${this.ast ? ' The Debugger shows your current code at that pixel.' : ''}</p>`
+        : '';
+      result.innerHTML = `<p class="${r.correct ? 'right' : 'wrong'}">${r.correct ? '✓ Right' : '✗ Not quite'}: you said <strong>${esc(said)}</strong>, and it's <strong>${esc(r.actual)}</strong>.</p>${spec.explain ? md(spec.explain) : ''}${note}`;
       const again = html(`<button class="btn btn-small btn-quiet">Ask me again</button>`);
       again.addEventListener('click', () => {
         delete this.state.predicted;
@@ -299,8 +298,24 @@ export class LessonController {
       result.append(again);
     };
 
-    if (this.state.predicted) {
-      showResult();
+    const reveal = (answer: number, answerLabel: string) => {
+      const r = revealPrediction(this.exercise, answer);
+      if ('error' in r) {
+        result.innerHTML = `<p class="warn">Couldn't work out the answer: ${esc(r.error)}</p>`;
+        return;
+      }
+      this.state.predicted = { answer: answerLabel };
+      saveProgress(this.d.progress);
+      showResult(answerLabel, r);
+      // Step through the pixel the question was about, in the learner's own code.
+      if (this.ast) this.d.debug.stepPixel(r.pixel, r.uniforms);
+    };
+
+    const said = this.state.predicted?.answer;
+    const savedAnswer = said === undefined ? null : answerFromLabel(spec, said);
+    const saved = savedAnswer === null ? null : revealPrediction(this.exercise, savedAnswer);
+    if (said !== undefined && saved && !('error' in saved)) {
+      showResult(said, saved);
     } else if (spec.kind === 'number') {
       const form = html(`<form class="predict-form"><input type="number" step="any" required placeholder="your guess" aria-label="Your prediction" /><button class="btn">Reveal</button></form>`) as HTMLFormElement;
       form.addEventListener('submit', (e) => {
@@ -316,6 +331,65 @@ export class LessonController {
         input.append(b);
       }
     }
+    return card;
+  }
+
+  // ---------- tutor: the hint ladder ----------
+
+  private tutorCard(): HTMLElement {
+    const card = html(`<section class="card tutor-card">
+      <div class="card-title">Stuck? <span class="muted">· hints, never the answer</span></div>
+      <ol class="hints"></ol>
+      <p class="tutor-err" hidden></p>
+      <button class="btn hint-btn"></button>
+    </section>`);
+    const list = card.querySelector('.hints')!;
+    const err = card.querySelector<HTMLElement>('.tutor-err')!;
+    const btn = card.querySelector<HTMLButtonElement>('.hint-btn')!;
+    const exerciseId = this.exercise.id;
+    const state = this.state;
+
+    const hintItem = (h: { level: HintLevel; text: string }) =>
+      html(`<li class="hint"><span class="hint-level">${HINT_NAMES[h.level]}</span><div class="hint-text">${tutorHtml(h.text)}</div></li>`);
+    // Drawn from saved state, so a hint that arrives after the learner left
+    // and came back (re-rendering this card) still shows up.
+    const draw = (error?: string) => {
+      const hints = state.hints ?? [];
+      list.replaceChildren(...hints.map(hintItem));
+      const pending = this.hintsPending.has(exerciseId);
+      btn.disabled = pending;
+      btn.textContent = pending
+        ? 'Thinking…'
+        : (["I'm stuck: give me a nudge", 'Still stuck: explain the idea', 'Still stuck: walk me through it'][hints.length] ?? 'Explain the steps another way');
+      btn.hidden = hints.length >= MAX_HINTS;
+      err.hidden = !error;
+      err.innerHTML = error ? tutorInlineHtml(error) : '';
+    };
+    this.redrawHints = draw;
+    draw();
+
+    btn.addEventListener('click', async () => {
+      if (this.hintsPending.has(exerciseId)) return;
+      const hints = (state.hints ??= []);
+      const level = Math.min(3, hints.length + 1) as HintLevel;
+      const context = { ...this.d.tutorContext(), checks: this.checkSummary(), trace: this.d.debug.snapshot() ?? undefined };
+      this.hintsPending.add(exerciseId);
+      draw();
+      let error: string | undefined;
+      try {
+        const r = await askTutor({ kind: 'hint', level, previous: hints.map((h) => h.text), context });
+        // Keep it even if the learner moved on: it's theirs when they come back.
+        hints.push({ level, text: r.text });
+        saveProgress(this.d.progress);
+      } catch (e) {
+        error = (e as Error).message;
+      } finally {
+        this.hintsPending.delete(exerciseId);
+      }
+      if (this.exercise.id !== exerciseId) return;
+      this.redrawHints?.(error);
+      if (!error) this.d.ui.scroll.querySelector('.tutor-card')?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    });
     return card;
   }
 

@@ -1,14 +1,7 @@
-import { prepareFragmentSource, type GlslVersion } from '../glsl/prepare';
-import { parseInfoLog, type ShaderDiagnostic } from '../glsl/diagnostics';
-import {
-  compileShader,
-  linkProgram,
-  setCanonicalUniforms,
-  FULLSCREEN_VS_100,
-  FULLSCREEN_VS_300,
-  type CanonicalUniforms,
-} from './gl';
-import { ProbeLayer } from '../probe/probeLayer';
+import type { ShaderDiagnostic } from '../glsl/diagnostics';
+import { Emitter } from '../events';
+import type { CanonicalUniforms } from './gl';
+import { FullscreenPass, type BuildResult } from './fullscreen';
 
 export interface CompileResult {
   ok: boolean;
@@ -33,21 +26,32 @@ export type MouseMode = 'hover' | 'drag';
 /** Cleared into the readback pixel; still there afterwards = the GPU discarded it. */
 export const DISCARD_SENTINEL = -1e30;
 
-// One triangle that covers the whole viewport.
-const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 3, -1, -1, 3]);
+/**
+ * Something that draws instead of the learner's shader while it's active
+ * (value-as-image). Plugged in from outside, so the runner knows nothing
+ * about probes.
+ */
+export interface Overlay {
+  readonly active: boolean;
+  render(width: number, height: number, uniforms: CanonicalUniforms, animating: boolean): void;
+  /** The canvas size or the clock jumped: cached readbacks are stale. */
+  invalidate(): void;
+}
 
 /**
  * Runs a fragment shader over a full-screen triangle with the canonical
  * uniforms (u_resolution, u_time, u_mouse). A failed compile keeps the last
- * working program on screen. When a probe program is installed, the probe
- * layer draws instead.
+ * working program on screen. While an overlay is active, it draws instead.
  */
 export class ShaderRunner {
   readonly gl: WebGL2RenderingContext;
-  readonly probe: ProbeLayer;
+  readonly pass: FullscreenPass;
+  overlay: Overlay | null = null;
+  /** After each frame is drawn. */
+  readonly frame = new Emitter<FrameInfo>();
   private program: WebGLProgram | null = null;
-  private readonly vertexShaders: Record<GlslVersion, WebGLShader>;
-  private readonly vao: WebGLVertexArrayObject;
+  /** Float render targets (EXT_color_buffer_float): needed to read the shader's raw output. */
+  private readonly floatTargets: boolean;
 
   private playing = true;
   private accumulated = 0;
@@ -58,9 +62,6 @@ export class ShaderRunner {
   private lastFrameAt = 0;
 
   mouseMode: MouseMode = 'hover';
-  onFrame: ((info: FrameInfo) => void) | null = null;
-  /** Called after each frame is drawn (e.g. to read back pixels). */
-  afterDraw: (() => void) | null = null;
   private checkTarget: { fbo: WebGLFramebuffer; tex: WebGLTexture; width: number; height: number } | null = null;
 
   /**
@@ -75,21 +76,10 @@ export class ShaderRunner {
     if (!gl) throw new Error('WebGL2 is not available in this browser.');
     this.gl = gl;
 
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, FULLSCREEN_TRIANGLE, gl.STATIC_DRAW);
-    this.vao = gl.createVertexArray()!;
-    gl.bindVertexArray(this.vao);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-
-    const vs = (code: string) => {
-      const r = compileShader(gl, gl.VERTEX_SHADER, code);
-      if (!r.ok) throw new Error(`internal vertex shader: ${r.log}`);
-      return r.value;
-    };
-    this.vertexShaders = { '300 es': vs(FULLSCREEN_VS_300), '100': vs(FULLSCREEN_VS_100) };
-    this.probe = new ProbeLayer(gl, this.vao, this.vertexShaders['300 es']);
+    this.pass = new FullscreenPass(gl);
+    // Enabled here, not by whoever happens to need it first: readOutputAt
+    // depends on it whether or not a probe overlay exists.
+    this.floatTargets = !!gl.getExtension('EXT_color_buffer_float');
 
     // hover: follow the pointer. drag: only while the button is held and
     // moving, so a plain click (which picks a pixel to debug) leaves it alone.
@@ -110,39 +100,16 @@ export class ShaderRunner {
   /** Compile the learner's shader (the normal view). */
   compile(source: string): CompileResult {
     const t0 = performance.now();
-    const built = this.build(source);
+    const built = this.pass.build(source);
     if (!built.ok) return { ok: false, diagnostics: built.diagnostics, ms: performance.now() - t0 };
     if (this.program) this.gl.deleteProgram(this.program);
     this.program = built.program;
     return { ok: true, diagnostics: [], ms: performance.now() - t0 };
   }
 
-  /**
-   * Compile a probe shader (already rewritten). On success the probe layer
-   * takes over drawing; on failure the previous probe stays.
-   */
-  compileProbe(probeSource: string): CompileResult {
-    const t0 = performance.now();
-    const built = this.build(probeSource);
-    if (!built.ok) return { ok: false, diagnostics: built.diagnostics, ms: performance.now() - t0 };
-    this.probe.setProgram(built.program);
-    return { ok: true, diagnostics: [], ms: performance.now() - t0 };
-  }
-
-  clearProbe(): void {
-    this.probe.setProgram(null);
-  }
-
-  private build(source: string): { ok: true; program: WebGLProgram } | { ok: false; diagnostics: ShaderDiagnostic[] } {
-    const gl = this.gl;
-    const prepared = prepareFragmentSource(source);
-    const fs = compileShader(gl, gl.FRAGMENT_SHADER, prepared.code);
-    if (!fs.ok) return { ok: false, diagnostics: parseInfoLog(fs.log, prepared.map, source) };
-    const prog = linkProgram(gl, this.vertexShaders[prepared.version], fs.value);
-    if (!prog.ok) {
-      return { ok: false, diagnostics: [{ line: null, message: prog.log.trim(), severity: 'error', origin: 'link' }] };
-    }
-    return { ok: true, program: prog.value };
+  /** Build another full-screen program on this context (e.g. a probe shader) without showing it. */
+  buildProgram(source: string): BuildResult {
+    return this.pass.build(source);
   }
 
   start(): void {
@@ -154,8 +121,7 @@ export class ShaderRunner {
       }
       this.lastFrameAt = now;
       this.draw();
-      this.afterDraw?.();
-      this.onFrame?.({ time: this.time, fps: this.fps, width: this.canvas.width, height: this.canvas.height });
+      this.frame.emit({ time: this.time, fps: this.fps, width: this.canvas.width, height: this.canvas.height });
     };
     this.rafId = requestAnimationFrame(frame);
   }
@@ -182,13 +148,13 @@ export class ShaderRunner {
   resetTime(): void {
     this.accumulated = 0;
     this.playStartedAt = performance.now();
-    this.probe.invalidateStats();
+    this.overlay?.invalidate();
   }
 
   /** Render at exactly this many pixels (lessons), or null to follow the CSS size. */
   setFixedSize(size: [number, number] | null): void {
     this.fixedSize = size;
-    this.probe.invalidateStats();
+    this.overlay?.invalidate();
   }
 
   get fixed(): [number, number] | null {
@@ -210,7 +176,7 @@ export class ShaderRunner {
    */
   readOutputAt(px: number, py: number, u: CanonicalUniforms): number[] | null {
     const gl = this.gl;
-    if (!this.program) return null;
+    if (!this.program || !this.floatTargets) return null;
     this.syncSize();
     const { width, height } = this.canvas;
     if (!this.checkTarget || this.checkTarget.width !== width || this.checkTarget.height !== height) {
@@ -232,10 +198,7 @@ export class ShaderRunner {
     gl.enable(gl.SCISSOR_TEST);
     gl.scissor(px, py, 1, 1);
     gl.clearBufferfv(gl.COLOR, 0, [DISCARD_SENTINEL, 0, 0, 0]);
-    gl.useProgram(this.program);
-    gl.bindVertexArray(this.vao);
-    setCanonicalUniforms(gl, this.program, u);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    this.pass.draw(this.program, u);
     gl.disable(gl.SCISSOR_TEST);
     const out = new Float32Array(4);
     gl.readBuffer(gl.COLOR_ATTACHMENT0);
@@ -257,8 +220,8 @@ export class ShaderRunner {
     this.syncSize();
     const { width, height } = this.canvas;
 
-    if (this.probe.active) {
-      this.probe.render(width, height, this.uniforms(), this.playing);
+    if (this.overlay?.active) {
+      this.overlay.render(width, height, this.uniforms(), this.playing);
       return;
     }
 
@@ -269,10 +232,7 @@ export class ShaderRunner {
       gl.clear(gl.COLOR_BUFFER_BIT);
       return;
     }
-    gl.useProgram(this.program);
-    gl.bindVertexArray(this.vao);
-    setCanonicalUniforms(gl, this.program, this.uniforms());
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    this.pass.draw(this.program, this.uniforms());
   }
 
   private syncSize(): void {
@@ -282,7 +242,7 @@ export class ShaderRunner {
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
-      this.probe.invalidateStats();
+      this.overlay?.invalidate();
     }
   }
 }

@@ -3,7 +3,10 @@
 export interface ExerciseProgress {
   code?: string;
   passed?: boolean;
-  predicted?: { answer: string; correct: boolean; actual: string };
+  /** The learner's answer as shown; it is re-graded on display, never stored graded. */
+  predicted?: { answer: string };
+  /** Tutor hints shown so far, oldest first. */
+  hints?: { level: 1 | 2 | 3; text: string }[];
 }
 
 export interface Progress {
@@ -29,15 +32,31 @@ export function loadProgress(): Progress {
 }
 
 let saveTimer = 0;
+let pending: Progress | null = null;
 
-/** Debounced: code changes on every keystroke. */
+function write(p: Progress): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(p));
+  } catch {
+    /* storage blocked: progress lasts for this visit only */
+  }
+}
+
+/** Debounced: code changes on every keystroke. A pending save is flushed when the page goes away. */
 export function saveProgress(p: Progress): void {
   clearTimeout(saveTimer);
+  pending = p;
   saveTimer = window.setTimeout(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(p));
-    } catch {
-      /* storage blocked: progress lasts for this visit only */
-    }
+    pending = null;
+    write(p);
   }, 300);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (!pending) return;
+    clearTimeout(saveTimer);
+    write(pending);
+    pending = null;
+  });
 }

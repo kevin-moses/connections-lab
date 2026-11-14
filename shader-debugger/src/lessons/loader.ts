@@ -1,3 +1,4 @@
+import { splitTitle } from '../../shared/lessonFiles';
 import type { Exercise, ExerciseConfig, Lesson } from './types';
 
 /**
@@ -47,7 +48,6 @@ export function buildLessons(files: Record<string, string>): Lesson[] {
       prompt: f['prompt.md']!,
       starter: f['starter.glsl']!,
       reference: f['reference.glsl']!,
-      notes: f['notes.md'] ?? '',
     } satisfies Exercise);
   }
 
@@ -58,9 +58,4 @@ export function buildLessons(files: Record<string, string>): Lesson[] {
     lesson.exercises.forEach((ex, j) => (ex.index = j));
   });
   return ordered;
-}
-
-function splitTitle(markdown: string, fallback: string): { title: string; body: string } {
-  const m = /^\s*#\s+(.+)\n?/.exec(markdown);
-  return m ? { title: m[1].trim(), body: markdown.slice(m[0].length).trim() } : { title: fallback, body: markdown.trim() };
 }

@@ -1,3 +1,3 @@
-Key idea: -1..1 → 0..1 is `* 0.5 + 0.5` (inverse of `* 2 - 1`). Clamping hides out-of-range values silently.
-Common mistakes: abs(v) (V shape, not a ramp: the increasing test catches it); clamp(v, 0.0, 1.0) (still black on the left); `v + 1.0` (0..2: right half saturates white).
-Nudges: ask what v is at the left edge and what it needs to be there; ask what range `v + 1.0` gives.
+Key idea: mix(a, b, t) doesn't clamp t: t below 0 extrapolates past a (here deep − (warm − deep) = (−0.8, −0.2, 1.0)), and the screen then silently clamps it. sin gives −1..1, so it must be remapped to 0..1 first: `* 0.5 + 0.5` (or `(wave + 1.0) / 2.0`), the inverse of lesson 1's `* 2.0 - 1.0`.
+Common mistakes: clamp(wave, 0.0, 1.0) (the lower half of every stripe is flat deep blue: the image check catches it); abs(wave) (twice as many stripes, never smooth at the bottom); `wave + 1.0` (0..2: overshoots past warm); removing sin (no stripes); remapping uv.x inside sin instead of the result.
+Nudges: ask what range `wave` has and what range mix's t should have; have them inspect `wave` and then `col` and compare where the hatching is; ask how they turned 0..1 into −1..1 when centering uv, and what undoes each step.

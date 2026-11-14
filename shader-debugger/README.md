@@ -6,6 +6,7 @@ Learn GLSL by seeing what every line does. See [PROPOSAL.md](PROPOSAL.md) for th
 
 ```bash
 npm install
+cp .env.example .env   # then add ANTHROPIC_API_KEY for the tutor
 npm run dev        # Vite on :5173 + tutor proxy on :3001 (proxied at /api)
 npm test           # unit tests
 npm run typecheck
@@ -17,7 +18,7 @@ npm run typecheck
 - WebGL2 runner: full-screen triangle, `u_resolution` / `u_time` / `u_mouse` (pixels, bottom-left origin), pause/reset time, live recompile (200 ms debounce). A broken compile keeps the last good shader on screen.
 - GPU errors parsed from the info log, mapped through a `LineMap` back to your lines (the injected `#version 300 es` never shifts line numbers), with the offending token underlined.
 - Debugger parser runs on every edit; the `AST` pill flags shaders the GPU accepts but the parser doesn't (a parser gap to fix, not your mistake).
-- Express tutor proxy behind a `TutorProvider` interface, with a stub provider until M4.
+- Express tutor proxy, with a stub model until M4.
 
 ## Status: M1 (value-as-image) ✅
 
@@ -60,24 +61,46 @@ The app opens in **Lessons** mode (switch to **Sandbox** in the top bar for free
 - Lesson canvases have an exact pixel size (e.g. 400×400, 600×300), so "the pixel at x = 100" means what it says.
 - Progress (code, passed, predictions) is saved in localStorage.
 
-Lesson files live in `lessons/<NN-lesson>/exercises/<NN-exercise>/` (`exercise.json`, `prompt.md`, `starter.glsl`, `reference.glsl`, `notes.md` for the M4 tutor). `test/lessons.test.ts` renders every exercise on the CPU interpreter and asserts: the reference passes every check, the starter fails at least one, and each prediction's explanation matches what the code really does. Add a lesson by adding a folder; the tests cover it automatically.
+Lesson files live in `lessons/<NN-lesson>/exercises/<NN-exercise>/` (`exercise.json`, `prompt.md`, `starter.glsl`, `reference.glsl`, `notes.md` for the M4 tutor). Teacher notes are read only by the tutor server and are never bundled into the browser. Reference solutions are bundled (the checker renders them in the browser), so they are hidden only from the UI; before a public deploy, checking has to move off the client. `test/lessons.test.ts` renders every exercise on the CPU interpreter and asserts: the reference passes every check, the starter fails at least one, and each prediction's explanation matches what the code really does. Add a lesson by adding a folder; the tests cover it automatically.
+
+## Status: M4 (tutor) ✅ (needs an API key)
+
+The tutor explains, hints and decodes errors. It never writes your exercise code. Add `ANTHROPIC_API_KEY` to `.env` and restart `npm run dev`; until then, tutor requests say how to connect. (`curl localhost:5173/api/health` shows whether it's live.)
+
+- **Explain** on each compile error in Problems: what the GPU's terse message means and where to look.
+- **Hover docs and completion** for every GLSL built-in and the app's inputs (`u_time`, `fragColor`, …), from `shared/glslReference.ts`. The tutor gets the same entries for the built-ins in your code, so its explanations match the docs. Examples are tested not to match any exercise's solution.
+- **I'm stuck** (lesson pane): a three-step hint ladder: *Nudge* (one thing to look at), *Concept* (the idea or built-in), *Steps* (plain-English steps, no code). Hints are saved with your progress. Each hint sees your code, the checklist, compile errors, and the stepper's current values if you're debugging a pixel.
+
+How it stays a teacher, not a coder:
+
+- The server reads the exercise prompt and **teacher notes** (`notes.md`) from disk. It never opens `reference.glsl`; a test checks that no solution line reaches any prompt.
+- In exercises, every answer is screened (`server/tutor/filter.ts`): code blocks, statements, and expressions built from your variables (`bandX * bandY`) are refused, while names, built-ins on placeholders (`step(edge, x)`) and quotes of your own code are fine. A refused answer is retried once with a stricter instruction, then replaced by a canned nudge toward the Debugger. The sandbox allows tiny snippets.
+
+Models (override in `.env`): `claude-sonnet-5-5` at medium effort for hints and errors (a cheaper `fast` tier is configured but unused since Explain lines was removed), with the server-side refusal fallback on. `TUTOR_PROVIDER=stub` turns model calls off. The browser only talks to `/api/tutor`; `LanguageModel` (`server/tutor/provider.ts`) is the swappable piece.
+
+The proxy listens on 127.0.0.1 only and limits each client to `TUTOR_RATE_LIMIT` requests a minute (default 60). Not yet: a bring-your-own-key field (needed before deploying anywhere public).
 
 ## Layout
 
 ```
-shared/tutor.ts          browser ↔ proxy contract
-server/                  Express proxy, TutorProvider + stub
+shared/                  browser ↔ proxy contract (tutor.ts), GLSL reference, plus code both sides use (LRU, lesson files)
+server/                  Express proxy (loopback only) + request validation + rate limit
+server/tutor/            Tutor (cache, screen, retry), prompts, filter, material (lesson files), Claude model, stub
+src/tutor/               client (fetch + safe markdown), error explainer
 src/glsl/                linemap, prepare (version injection), diagnostics (info-log parsing), parse (AST)
-src/render/              runner (WebGL2 loop) + gl helpers
+src/render/              runner (WebGL2 loop, pluggable overlay), fullscreen pass (shared GPU plumbing), gl helpers, render types
 src/probe/               value-as-image: target, rewrite, probeLayer, visualize, inspector (UI)
-src/interp/              CPU interpreter: values, ops, builtins, interpreter (trace), crossCheck, corpus
-src/debugger/            stepper UI: navigation (step over/out, alignment), debugger (panel + editor)
+src/interp/              CPU interpreter: values, ops, builtins, interpreter, trace (types), astUtil, corpus
+src/debugger/            stepper UI: navigation (step over/out, alignment), crossCheck (GPU vs CPU), debugger (panel + editor)
 src/lessons/             types, loader/content, checker, cpuRender, predict, progress, lessonView (pane)
 src/render/offscreen.ts  small GPU renderer for checks and the target preview
 lessons/                 lesson content (markdown, JSON, GLSL)
 selftest.html            GPU vs interpreter agreement report
-src/editor/              CodeMirror setup + GLSL language
-test/                    vitest
+src/editor/              CodeMirror setup + GLSL language + reference (completion, hover docs)
+src/events.ts            typed Emitter used for frame, compile and tutor-status events
+docs/decisions/          design decisions (0001: how M5 dialects keep positions)
+test/                    vitest (unit)
+e2e/                     Playwright smoke tests against real Chrome (npm run test:e2e)
 ```
 
 ## Parser spike result

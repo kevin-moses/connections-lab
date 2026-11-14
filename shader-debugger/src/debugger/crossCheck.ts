@@ -1,4 +1,4 @@
-import type { TraceResult } from './interpreter';
+import type { TraceResult } from '../interp/interpreter';
 import { DISCARD_SENTINEL } from '../render/runner';
 
 export interface CrossCheck {

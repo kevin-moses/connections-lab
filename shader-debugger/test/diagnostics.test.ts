@@ -21,6 +21,14 @@ describe('parseInfoLog', () => {
     expect(diags[0]).toMatchObject({ line: 4, message: "undeclared identifier 'foo'", severity: 'error', from: 12, to: 15 });
   });
 
+  it("says how to declare an app uniform the shader uses but didn't declare", () => {
+    const src = 'void main() {\n  float t = u_time;\n}';
+    const { map: m } = prepareFragmentSource(src);
+    const [d] = parseInfoLog("ERROR: 0:3: 'u_time' : undeclared identifier", m, src);
+    expect(d.message).toBe("undeclared identifier 'u_time'. The app supplies it, but you have to declare it: add `uniform float u_time;` at the top");
+    expect(d).toMatchObject({ line: 2, from: 12, to: 18 });
+  });
+
   it('handles errors without a token', () => {
     const diags = parseInfoLog("ERROR: 0:6: '' : syntax error", map, source);
     expect(diags[0]).toMatchObject({ line: 5, message: 'syntax error' });

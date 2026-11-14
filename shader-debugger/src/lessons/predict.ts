@@ -1,7 +1,8 @@
 import type { Program } from '@shaderfrog/glsl-parser/ast';
 import { traceFragment } from '../interp/interpreter';
 import { formatNumber, isArrayValue } from '../interp/values';
-import type { PredictSpec } from './types';
+import { parseGlsl } from '../glsl/parse';
+import { DEFAULT_CANVAS, type Exercise, type PredictSpec } from './types';
 
 export interface PredictionRun {
   /** Pixel coordinates, origin bottom-left. */
@@ -40,7 +41,7 @@ export interface Grade {
 }
 
 /** `answer` is a number for number questions, a choice index for choices. */
-export function gradePrediction(spec: PredictSpec, value: number[], answer: number): Grade {
+function gradePrediction(spec: PredictSpec, value: number[], answer: number): Grade {
   const actualText = value.length === 1 ? formatNumber(value[0]) : `(${value.map((x) => formatNumber(x)).join(', ')})`;
   if (spec.kind === 'number') {
     return { correct: Math.abs(answer - value[0]) <= (spec.tolerance ?? 0.02), actualText };
@@ -57,4 +58,52 @@ export function gradePrediction(spec: PredictSpec, value: number[], answer: numb
     }
   });
   return { correct: answer === best, actualText, correctChoice: best };
+}
+
+export interface Reveal {
+  correct: boolean;
+  /** The true answer, as shown to the learner (a choice label or a number). */
+  actual: string;
+  /** Where to open the stepper. */
+  pixel: [number, number];
+  uniforms: PredictionRun['uniforms'];
+}
+
+/** The question's value on each exercise's starter (null: it didn't parse). It never changes, so run it once. */
+const starterRuns = new Map<string, PredictionRun | null>();
+
+function starterRun(ex: Exercise, spec: PredictSpec): PredictionRun | null {
+  if (!starterRuns.has(ex.id)) {
+    const parsed = parseGlsl(ex.starter);
+    starterRuns.set(ex.id, parsed.ok ? runPrediction(spec, parsed.ast, ex.config.canvas ?? DEFAULT_CANVAS) : null);
+  }
+  return starterRuns.get(ex.id)!;
+}
+
+/**
+ * Grade an answer to an exercise's prediction question. Every question is
+ * about the starter code (or the first change to it), so it is always graded
+ * on the starter, never on the learner's current code: once they've made the
+ * change, re-running the question's expression on their code would apply it
+ * twice. `answer` is a number, or a choice index.
+ */
+export function revealPrediction(ex: Exercise, answer: number): Reveal | { error: string } {
+  const spec = ex.config.predict;
+  if (!spec) return { error: 'This exercise has no prediction.' };
+  const run = starterRun(ex, spec);
+  if (!run) return { error: "The starter code didn't parse." };
+  if (!run.value) return { error: run.error ?? 'No value.' };
+  const g = gradePrediction(spec, run.value, answer);
+  const actual = spec.kind === 'choice' ? spec.choices![g.correctChoice!].label : g.actualText;
+  return { correct: g.correct, actual, pixel: run.pixel, uniforms: run.uniforms };
+}
+
+/** Turn a saved answer label back into what `revealPrediction` takes. */
+export function answerFromLabel(spec: PredictSpec, label: string): number | null {
+  if (spec.kind === 'choice') {
+    const i = (spec.choices ?? []).findIndex((c) => c.label === label);
+    return i >= 0 ? i : null;
+  }
+  const n = Number(label);
+  return Number.isFinite(n) ? n : null;
 }

@@ -1,4 +1,4 @@
-import { generate, parser } from '@shaderfrog/glsl-parser';
+import { parser } from '@shaderfrog/glsl-parser';
 import type { AstNode, FunctionNode, Program } from '@shaderfrog/glsl-parser/ast';
 import { binary, compoundOperator, unary } from './ops';
 import { callBuiltin, isBuiltin } from './builtins';
@@ -13,7 +13,6 @@ import {
   convert,
   float,
   formatValue,
-  indexValue,
   isArrayValue,
   isMatrix,
   isVector,
@@ -23,7 +22,6 @@ import {
   swizzleIndices,
   truthy,
   type,
-  typeName,
   valueTypeName,
   zero,
   zeroArray,
@@ -33,85 +31,25 @@ import {
   type Value,
 } from './values';
 
-// ---------- public types ----------
+import type { BuiltinCall, StepKind, TraceInputs, TraceOptions, TraceResult, TraceStep, VarSnap } from './trace';
+import {
+  VOID,
+  conditionExpr,
+  exprText,
+  flattenPostfix,
+  indexAny,
+  isLValueNode,
+  oneLike,
+  parseExpression,
+  parseIntLiteral,
+  signatureOf,
+  zeroLike,
+  type ArrayDecl,
+  type PostOp,
+} from './astUtil';
 
-export interface TraceInputs {
-  /** Pixel coordinates (integers, origin bottom-left); gl_FragCoord gets +0.5. */
-  pixel: [number, number];
-  /** Uniform values by name. Missing uniforms are 0, like the GPU's default. */
-  uniforms: Record<string, number | number[]>;
-}
-
-export interface TraceOptions {
-  /** Stop recording after this many steps. */
-  maxSteps?: number;
-  /**
-   * Record a snapshot per step (default true). Turn off when only the final
-   * output matters, e.g. rendering a whole image on the CPU.
-   */
-  record?: boolean;
-  /**
-   * Evaluate this expression in main()'s scope just before it returns
-   * (e.g. `uv.x` or `mix(a, b, 0.25).r`). Result lands in `finalValue`.
-   */
-  finalExpression?: string;
-  /** Stop a single loop after this many passes. */
-  maxLoopIterations?: number;
-}
-
-export interface VarSnap {
-  name: string;
-  value: AnyValue;
-}
-
-export interface BuiltinCall {
-  name: string;
-  args: string[];
-  result: string;
-}
-
-export type StepKind = 'statement' | 'branch' | 'loop' | 'call' | 'return' | 'jump' | 'discard' | 'end';
-
-export interface StackEntry {
-  fn: string;
-  line: number;
-}
-
-export interface TraceStep {
-  line: number;
-  kind: StepKind;
-  /** Short human description, e.g. `d = -0.421` or `i < 3 → true`. */
-  text: string;
-  /** Call depth: 0 = main. */
-  depth: number;
-  fn: string;
-  stack: StackEntry[];
-  /** Visible locals in the current function, after this step. */
-  locals: VarSnap[];
-  /** Writable globals (outputs, globals you declared), after this step. */
-  globals: VarSnap[];
-  /** Variables written during this step. */
-  changed: string[];
-  /** Built-in calls evaluated during this step, inputs → output. */
-  builtins: BuiltinCall[];
-  /** 1-based pass of the innermost loop, if inside one. */
-  loopIter: number | null;
-}
-
-export interface TraceResult {
-  steps: TraceStep[];
-  /** Final value of the shader's output (`out vec4`, or gl_FragColor). */
-  output: { name: string; value: Value } | null;
-  discarded: boolean;
-  error: { message: string; line: number | null } | null;
-  /** True when the step cap stopped the run. */
-  truncated: boolean;
-  /** Uniforms and built-in inputs, for display. */
-  inputs: VarSnap[];
-  /** Value of `options.finalExpression`, if asked for. */
-  finalValue?: AnyValue | null;
-  finalError?: string;
-}
+export type { TraceInputs, TraceOptions, VarSnap, BuiltinCall, StepKind, StackEntry, TraceStep, TraceResult } from './trace';
+export { parseExpression } from './astUtil';
 
 // ---------- internals ----------
 
@@ -191,15 +129,6 @@ export function traceCall(ast: Program, expression: string, inputs: TraceInputs,
     return { steps: [], output: null, discarded: false, error: { message: `Can't parse ${expression}`, line: null }, truncated: false, inputs: [] };
   }
   return new Interpreter(ast, inputs, options).run({ expr, text: expression });
-}
-
-/** Parse a standalone GLSL expression. */
-export function parseExpression(expression: string): AstNode {
-  const prog = parser.parse(`void __e() { __x = (${expression}); }`, { quiet: true });
-  const fn = prog.program[0] as FunctionNode;
-  const stmt = fn.body.statements[0] as unknown as { expression: { right: AstNode } };
-  const group = stmt.expression.right as unknown as { expression: AstNode };
-  return group.expression;
 }
 
 class Interpreter {
@@ -932,91 +861,6 @@ class Interpreter {
     }
 
     throw new GlslRuntimeError('Can\'t assign to this expression.');
-  }
-}
-
-// ---------- helpers ----------
-
-interface ArrayDecl {
-  elem: Type;
-  length: number;
-}
-
-interface PostOp {
-  type: string;
-  literal?: string;
-  selection?: { identifier?: string; literal?: string };
-  expression?: AstNode;
-}
-
-/**
- * The parser nests postfix chains oddly: `m[1][1]` is
- * postfix(m, postfix([1], [1])). Flatten to a base plus ordered operations.
- */
-function flattenPostfix(node: AstNode): { base: AstNode; ops: PostOp[] } {
-  const n = node as unknown as { expression: AstNode; postfix: AstNode };
-  const ops: PostOp[] = [];
-  const collect = (p: AstNode) => {
-    if (p.type === 'postfix') {
-      const pp = p as unknown as { expression: AstNode; postfix: AstNode };
-      collect(pp.expression);
-      collect(pp.postfix);
-    } else ops.push(p as unknown as PostOp);
-  };
-  collect(n.postfix);
-  return { base: n.expression, ops };
-}
-
-const VOID = { elem: FLOAT, length: -1 } as unknown as Type;
-
-function signatureOf(t: Type | ArrayDecl): string {
-  if (t === VOID) return 'void';
-  if ('length' in t) return `${typeName(t.elem)}[${t.length}]`;
-  return typeName(t);
-}
-
-function parseIntLiteral(token: string): Value {
-  const unsigned = /[uU]$/.test(token);
-  const body = token.replace(/[uU]$/, '');
-  let n: number;
-  if (/^0[xX]/.test(body)) n = parseInt(body.slice(2), 16);
-  else if (/^0\d/.test(body)) n = parseInt(body, 8);
-  else n = parseInt(body, 10);
-  return make(type(unsigned ? 'uint' : 'int'), [n]);
-}
-
-function indexAny(base: AnyValue, i: number): Value {
-  if (isArrayValue(base)) {
-    if (i < 0 || i >= base.items.length) throw new GlslRuntimeError(`Index ${i} is out of range for an array of ${base.items.length}.`);
-    return base.items[i];
-  }
-  return indexValue(base, i);
-}
-
-function oneLike(v: Value): Value {
-  return make(type(v.type.base), [1]);
-}
-
-function zeroLike(v: AnyValue): AnyValue {
-  return isArrayValue(v) ? zeroArray(v.elem, v.items.length) : zero(v.type);
-}
-
-function isLValueNode(n: AstNode): boolean {
-  return n.type === 'identifier' || n.type === 'postfix' || n.type === 'group';
-}
-
-/** The for-loop condition can be a `condition_expression` wrapper. */
-function conditionExpr(node: AstNode): AstNode {
-  const n = node as unknown as { type: string; expression?: AstNode };
-  if (n.type === 'expression_statement' && n.expression) return n.expression;
-  return node;
-}
-
-function exprText(node: AstNode): string {
-  try {
-    return generate(node).replace(/\s+/g, ' ').trim();
-  } catch {
-    return '…';
   }
 }
 

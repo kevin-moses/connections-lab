@@ -1,3 +1,3 @@
-Key idea: step(edge, x) is a threshold; the edge can be any value, including one from a uniform.
-Common mistakes: step(uv.x, edge) (arguments swapped: the sides flip); using u_mouse.x without dividing (edge is in pixels while uv.x is 0..1: everything is black); dividing by u_resolution.y.
-Nudges: ask which units uv.x and u_mouse.x are in; have them inspect `s` and move the mouse.
+Key idea: step(edge, x) is a threshold; the edge can be any value, including one from a uniform. u_mouse has to be declared first (`uniform vec2 u_mouse;`), like u_time was.
+Common mistakes: using u_mouse without declaring it ("undeclared identifier 'u_mouse'"); step(uv.x, edge) (arguments swapped: the sides flip); using u_mouse.x without dividing (edge is in pixels while uv.x is 0..1: everything is black); dividing by u_resolution.y.
+Nudges: ask which units uv.x and u_mouse.x are in; have them inspect `s` and move the mouse. If the compile fails, ask what the error says and point back to how they declared u_time.

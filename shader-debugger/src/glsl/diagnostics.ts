@@ -17,6 +17,13 @@ const LOG_LINE = /^(ERROR|WARNING):\s*\d+:(\d+):\s*(.*)$/;
 const TOKEN_PREFIX = /^'([^']*)'\s*:\s*(.*)$/;
 const NOISE = [/compilation terminated/i, /^\d+ compilation errors?/i];
 
+/** The uniforms the app always supplies; a shader still has to declare the ones it uses. */
+const APP_UNIFORMS: Record<string, string> = {
+  u_resolution: 'uniform vec2 u_resolution;',
+  u_time: 'uniform float u_time;',
+  u_mouse: 'uniform vec2 u_mouse;',
+};
+
 /**
  * Parse a WebGL shader info log into diagnostics on the learner's lines.
  * `source` is the learner's text (not the generated code); it's used to find
@@ -44,7 +51,10 @@ export function parseInfoLog(log: string, map: LineMap, source: string): ShaderD
 
     const tok = TOKEN_PREFIX.exec(body);
     const token = tok?.[1] ?? '';
-    const message = tok ? (token ? `${tok[2]} '${token}'` : tok[2]) : body;
+    let message = tok ? (token ? `${tok[2]} '${token}'` : tok[2]) : body;
+    if (/undeclared identifier/i.test(message) && APP_UNIFORMS[token]) {
+      message += `. The app supplies it, but you have to declare it: add \`${APP_UNIFORMS[token]}\` at the top`;
+    }
 
     const diag: ShaderDiagnostic = { line, message, severity, origin: 'gpu' };
     if (line !== null && token) {

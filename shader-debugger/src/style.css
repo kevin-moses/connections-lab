@@ -3,8 +3,9 @@
   --panel: #14171d;
   --editor-bg: #111318;
   --border: #232733;
-  --active-line: #181b22;
-  --selection: #2a3550;
+  /* Translucent: CodeMirror draws the selection under the line backgrounds. */
+  --active-line: rgba(255, 255, 255, 0.035);
+  --selection: rgba(110, 150, 255, 0.32);
   --probe-line: rgba(255, 180, 84, 0.07);
   --probe-expr: rgba(255, 180, 84, 0.18);
   --exec: #5cc8ff;
@@ -564,6 +565,7 @@ button { font: inherit; }
 .predict-result .right { color: var(--ok); }
 .predict-result .wrong { color: var(--warn); }
 .predict-result .warn { color: var(--warn); }
+.predict-note { font-size: 12px; }
 
 .target-preview { display: block; width: 168px; max-width: 100%; border-radius: 4px; box-shadow: 0 0 0 1px var(--border); image-rendering: auto; }
 
@@ -589,6 +591,36 @@ button { font: inherit; }
 .diff-row figure { margin: 0; text-align: center; }
 .diff-row canvas { width: 76px; image-rendering: pixelated; border-radius: 3px; box-shadow: 0 0 0 1px var(--border); }
 .diff-row figcaption { font-size: 11px; color: var(--text-faint); }
+
+/* ---------- tutor ---------- */
+
+.hint-text code, .problem-explain code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: #1c2029;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.tutor-err { color: var(--warn); }
+
+.tutor-card { border-color: color-mix(in srgb, var(--pixel-b) 30%, var(--border)); }
+.tutor-card .card-title { color: var(--pixel-b); }
+.hints { list-style: none; margin: 4px 0 8px; padding: 0; }
+.hint { padding: 6px 0; border-top: 1px solid #191c23; }
+.hint:first-child { border-top: 0; }
+.hint-level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.hint-text p { margin: 2px 0 6px; }
+.hint-text ol, .hint-text ul { margin: 4px 0; padding-left: 20px; }
+.tutor-card .tutor-err { margin: 4px 0 8px; }
+
+.problem-list .explain-btn { margin: 0 0 0 8px; padding: 0 7px; font: 11.5px var(--font-ui); vertical-align: 1px; }
+.problem-explain {
+  grid-column: 3;
+  margin: 2px 0 4px;
+  font: 13px/1.45 var(--font-ui);
+  color: var(--text);
+}
+.problem-explain p { margin: 0 0 4px; }
 
 .lesson-foot { display: flex; justify-content: space-between; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); }
 

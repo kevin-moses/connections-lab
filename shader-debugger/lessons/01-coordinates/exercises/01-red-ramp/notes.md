@@ -1,3 +1,3 @@
-Key idea: gl_FragCoord is in pixels; dividing by u_resolution normalizes it to 0..1 so the shader is resolution-independent.
-Common mistakes: dividing by u_resolution (a vec2) and assigning to a float; using u_resolution.y; forgetting the .x.
-Nudges: ask what the red value is at the right edge on a 64-pixel-wide canvas with the starter code. Point them at the u_resolution uniform declared at the top.
+Key idea: gl_FragCoord is in pixels; dividing by u_resolution normalizes it to 0..1 so the shader is resolution-independent. This is also where they meet uniforms: the app always sends u_resolution, but the shader only sees it once it's declared (`uniform vec2 u_resolution;`, given in the prompt).
+Common mistakes: using u_resolution without declaring it ("undeclared identifier 'u_resolution'"); declaring it as a float instead of a vec2; declaring it inside main(); dividing by u_resolution (a vec2) and assigning to a float; using u_resolution.y; forgetting the .x.
+Nudges: ask what the red value is at the right edge on a 64-pixel-wide canvas with the starter code. If they get the undeclared-identifier error, point them back to the declaration line in the prompt and ask where the other top-level declarations (`out vec4 fragColor;`) live.
