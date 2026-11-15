@@ -1,0 +1,18 @@
+{
+  "title": "Checkerboard",
+  "variants": [{ "size": [64, 64] }],
+  "tests": [
+    { "type": "pixel", "label": "The bottom-left square is black", "at": [0.06, 0.06], "expect": [0, 0, 0], "tol": 0.02 },
+    { "type": "pixel", "label": "The square to its right is white", "at": [0.19, 0.06], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "The square above it is white", "at": [0.06, 0.19], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "Diagonally up-right is black again", "at": [0.19, 0.19], "expect": [0, 0, 0], "tol": 0.02 }
+  ],
+  "predict": {
+    "question": "At the pixel with **uv.x = 0.4**, which column is it in? What is `floor(uv.x * 8.0)`?",
+    "at": [0.4, 0.5],
+    "expr": "floor(uv.x * 8.0)",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**3.** 0.4 × 8 = 3.2, and floor rounds down. Columns are numbered from 0, so this is the fourth one."
+  }
+}

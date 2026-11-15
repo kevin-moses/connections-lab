@@ -55,11 +55,11 @@ export const GLSL_REFERENCE: GlslEntry[] = [
   fn('radians', g1('radians').map((s) => s.replace('x', 'degrees')), 'Degrees to radians (× π/180).', 'float a = radians(90.0); // 1.5708'),
   fn('degrees', g1('degrees').map((s) => s.replace('x', 'radians')), 'Radians to degrees (× 180/π).'),
   fn('sin', g1('sin'), 'Sine of an angle in radians; swings between -1 and 1.', 'float wave = sin(p.x * 10.0);'),
-  fn('cos', g1('cos'), 'Cosine of an angle in radians; like sin shifted by a quarter turn.', 'vec2 p = vec2(cos(a), sin(a));'),
+  fn('cos', g1('cos'), 'Cosine of an angle in radians; like sin shifted by a quarter turn.', 'vec2 dir = vec2(cos(angle), sin(angle)); // length 1'),
   fn('tan', g1('tan'), 'Tangent of an angle in radians (sin / cos).'),
   fn('asin', g1('asin'), 'Inverse sine: the angle (-π/2 to π/2) whose sine is x.'),
   fn('acos', g1('acos'), 'Inverse cosine: the angle (0 to π) whose cosine is x.'),
-  fn('atan', ['genType atan(genType y, genType x)', 'genType atan(genType y_over_x)'], 'Inverse tangent. With two arguments: the angle of the point (x, y), from -π to π.', 'float angle = atan(p.y, p.x);'),
+  fn('atan', ['genType atan(genType y, genType x)', 'genType atan(genType y_over_x)'], 'Inverse tangent. With two arguments: the angle of the point (x, y), from -π to π.', 'float heading = atan(dir.y, dir.x); // -pi .. pi'),
   fn('sinh', g1('sinh'), 'Hyperbolic sine.'),
   fn('cosh', g1('cosh'), 'Hyperbolic cosine.'),
   fn('tanh', g1('tanh'), 'Hyperbolic tangent; squashes any value into -1..1.'),
@@ -102,7 +102,7 @@ export const GLSL_REFERENCE: GlslEntry[] = [
   fn('isinf', ['bvecN isinf(genType x)'], 'True where x is infinite.'),
 
   // Geometry
-  fn('length', ['float length(genType x)'], 'Length of a vector: the distance from the origin.', 'float r = length(p); // distance from (0, 0)'),
+  fn('length', ['float length(genType x)'], 'Length of a vector: the distance from the origin.', 'float r = length(offset); // distance from (0, 0)'),
   fn('distance', ['float distance(genType a, genType b)'], 'Distance between two points: length(a - b).', 'float d = distance(p, q);'),
   fn('dot', ['float dot(genType a, genType b)'], 'Sum of the component products. 1 for same direction, 0 at right angles, -1 opposite (unit vectors).'),
   fn('cross', ['vec3 cross(vec3 a, vec3 b)'], 'A vector at right angles to both a and b.'),

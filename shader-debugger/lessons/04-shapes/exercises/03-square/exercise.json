@@ -1,0 +1,17 @@
+{
+  "title": "A square from distance",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "pixel", "label": "Near a corner of the square (0.17, 0.17 from the center) is inside", "at": [0.67, 0.67], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "Just past the side (0.22 to the right) is outside", "at": [0.72, 0.5], "expect": [0, 0, 0], "tol": 0.02 },
+    { "type": "region", "label": "The whole middle square is white", "rect": [0.32, 0.32, 0.68, 0.68], "channel": "luma", "min": 0.98 }
+  ],
+  "predict": {
+    "question": "Take the pixel at **(0.67, 0.67)**, so `p` ≈ (0.17, 0.17). What is `max(abs(p.x), abs(p.y))` there?",
+    "at": [0.67, 0.67],
+    "expr": "max(abs(p.x), abs(p.y))",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**0.17**, less than 0.2, so it's inside the square. The circle distance `length(p)` is about 0.24 there, which is outside the circle: that corner is exactly what the square adds."
+  }
+}

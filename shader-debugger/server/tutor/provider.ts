@@ -20,8 +20,8 @@ export interface ModelResult {
 }
 
 /**
- * The swappable part: anything that turns a prompt into text. Claude today
- * (claude.ts); a local model or a fake for tests tomorrow.
+ * The swappable part: anything that turns a prompt into text. OpenRouter
+ * today (openrouter.ts); a local model or a fake for tests tomorrow.
  */
 export interface LanguageModel {
   readonly name: string;

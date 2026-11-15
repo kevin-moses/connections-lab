@@ -36,17 +36,20 @@ describe('GLSL reference', () => {
 
   it("examples don't give away any exercise's solution", () => {
     const norm = (c: string) => c.replace(/\/\/.*$/gm, '').replace(/\s+/g, '');
-    const references: string[] = [];
+    const exercises: { reference: string; starter: string }[] = [];
     for (const lesson of readdirSync('lessons')) {
       for (const ex of readdirSync(`lessons/${lesson}/exercises`)) {
-        references.push(norm(readFileSync(`lessons/${lesson}/exercises/${ex}/reference.glsl`, 'utf8')));
+        const read = (f: string) => norm(readFileSync(`lessons/${lesson}/exercises/${ex}/${f}`, 'utf8'));
+        exercises.push({ reference: read('reference.glsl'), starter: read('starter.glsl') });
       }
     }
     for (const e of GLSL_REFERENCE) {
       if (!e.example) continue;
-      // The example's right-hand side (or the whole statement) must not appear in a solution.
+      // The example's right-hand side (or the whole statement) must not be part of a solution
+      // the starter doesn't already show (e.g. atan(p.y, p.x) is given in the polar starters).
       const rhs = norm(e.example.split('=').slice(1).join('=') || e.example).replace(/;$/, '');
-      expect(references.some((r) => r.includes(rhs)), `${e.name}: ${e.example}`).toBe(false);
+      const gives = exercises.some((x) => x.reference.includes(rhs) && !x.starter.includes(rhs));
+      expect(gives, `${e.name}: ${e.example}`).toBe(false);
     }
   });
 });

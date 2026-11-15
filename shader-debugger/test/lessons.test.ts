@@ -25,14 +25,39 @@ const PREDICTED: Record<string, number | string> = {
   '03-step/03-rectangle': 0,
   '03-step/04-rect-function': 'Black',
   '03-step/05-smoothstep': 0.5,
+  '04-shapes/01-ring': 0.3,
+  '04-shapes/02-union': 2,
+  '04-shapes/03-square': 0.17,
+  '04-shapes/04-inside-outside': -0.3,
+  '05-patterns/01-repeat': 0.4,
+  '05-patterns/02-checkerboard': 3,
+  '05-patterns/03-per-tile': 2,
+  '05-patterns/04-bricks': 1,
+  '06-rotation/01-rotate2d': '(1, 0): unchanged',
+  '06-rotation/02-spin': 6.28,
+  '06-rotation/03-slices': 1.57,
+  '06-rotation/04-flower': 0.33,
+  '07-hydra-blocks/01-osc': 1.59,
+  '07-hydra-blocks/02-rotate': '(0.5, 0.5): it stays in the middle',
+  '07-hydra-blocks/03-color': 0.3,
+  '07-hydra-blocks/04-kaleid': 1.57,
+  '08-hydra-stacks/01-coord-order': 0.2,
+  '08-hydra-stacks/02-diff': 0.7,
+  '08-hydra-stacks/03-modulate': 0.075,
+  '08-hydra-stacks/04-translate': 20.94,
 };
 
 describe('lesson content', () => {
-  it('loads lessons 1–3 in order', () => {
+  it('loads lessons 1–8 in order', () => {
     expect(LESSONS.map((l) => [l.title, l.exercises.length])).toEqual([
       ['Coordinates & uv', 4],
       ['Color', 5],
       ['step & thresholds', 5],
+      ['Shapes with distance', 4],
+      ['Patterns and tiling', 4],
+      ['Rotation and polar coordinates', 4],
+      ["Hydra's building blocks", 4],
+      ['Stacking like Hydra', 4],
     ]);
     for (const ex of exercises) {
       expect(ex.prompt.length, ex.id).toBeGreaterThan(50);

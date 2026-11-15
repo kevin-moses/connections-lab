@@ -1,0 +1,18 @@
+{
+  "title": "osc: Hydra's first source",
+  "animated": true,
+  "variants": [{ "size": [96, 32], "time": 0 }, { "time": 2.0 }],
+  "tests": [
+    { "type": "call", "label": "At x = 0 the wave is in the middle: gray", "call": "osc(vec2(0.0, 0.5), 10.0, 0.0, 0.0)", "expect": [0.5, 0.5, 0.5, 1], "tol": 0.002 },
+    { "type": "call", "label": "A little further right, all three rise together (offset 0)", "call": "osc(vec2(0.05, 0.5), 10.0, 0.0, 0.0)", "expect": [0.7397, 0.7397, 0.7397, 1], "tol": 0.002 },
+    { "type": "call", "label": "With an offset, red lags and blue leads", "call": "osc(vec2(0.1, 0.0), 10.0, 0.0, 1.0)", "expect": [0.5, 0.9207, 0.9546, 1], "tol": 0.002 }
+  ],
+  "predict": {
+    "question": "`sin(x * frequency)` completes one full wave every 2π. With **frequency = 10**, how many full stripes (waves) fit across the canvas (x from 0 to 1)?",
+    "at": [0.5, 0.5],
+    "expr": "10.0 / 6.2831853",
+    "kind": "number",
+    "tolerance": 0.05,
+    "explain": "**About 1.6.** Hydra's frequency is in radians per canvas width, not stripes: 10 / 2π ≈ 1.59. That's why `osc(60)` shows about 10 stripes, not 60."
+  }
+}

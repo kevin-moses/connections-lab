@@ -1,0 +1,18 @@
+{
+  "title": "Combining two chains",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "call", "label": "diff takes the absolute difference of each color channel", "call": "diff(vec4(0.2, 0.5, 0.9, 1.0), vec4(1.0, 0.5, 0.0, 1.0))", "expect": [0.8, 0, 0.9, 1], "tol": 0.001 },
+    { "type": "call", "label": "…and keeps the larger alpha", "call": "diff(vec4(0.0, 0.0, 0.0, 0.3), vec4(0.0, 0.0, 0.0, 0.8))", "expect": [0, 0, 0, 0.8], "tol": 0.001 },
+    { "type": "pixel", "label": "Inside the square, the stripes are inverted (the middle is light now)", "at": [0.5, 0.5], "expect": [0.98, 0.98, 0.98], "tol": 0.04 },
+    { "type": "pixel", "label": "Outside the square, the stripes are as they were", "at": [0.1, 0.5], "expect": [0.92, 0.92, 0.92], "tol": 0.04 }
+  ],
+  "predict": {
+    "question": "Inside the white square, a stripe that's **0.3** gray is diffed with white (1.0). What comes out?",
+    "at": [0.5, 0.5],
+    "expr": "abs(0.3 - 1.0)",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**0.7.** |0.3 − 1| = 0.7: diffing with white inverts. Diffing with black (0) changes nothing, so the square cuts an inverted window into the stripes."
+  }
+}

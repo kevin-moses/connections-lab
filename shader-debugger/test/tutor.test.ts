@@ -1,12 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import Anthropic from '@anthropic-ai/sdk';
+import type { OpenRouter } from '@openrouter/sdk';
+import * as orErrors from '@openrouter/sdk/models/errors';
 import { screenOutput, learnerVariables } from '../server/tutor/filter';
 import { createMaterialLoader, MATERIAL_FILES } from '../server/tutor/material';
 import { buildCall, numberLines, SYSTEM_PROMPT } from '../server/tutor/prompts';
 import { Tutor } from '../server/tutor/tutor';
-import { ClaudeModel } from '../server/tutor/claude';
+import { DEFAULT_MODEL, OpenRouterModel, toTutorError } from '../server/tutor/openrouter';
 import type { LanguageModel, ModelCall, ModelResult } from '../server/tutor/provider';
 import { TutorError } from '../server/tutor/provider';
 import { parseTutorRequest } from '../server/validate';
@@ -208,44 +209,57 @@ describe('Tutor', () => {
   });
 });
 
-describe('ClaudeModel', () => {
-  function fakeClient(response: Partial<Anthropic.Beta.BetaMessage>) {
-    const create = vi.fn().mockResolvedValue({ model: 'm', stop_reason: 'end_turn', content: [], ...response });
-    return { client: { beta: { messages: { create } } } as unknown as Anthropic, create };
+describe('OpenRouterModel', () => {
+  type Choice = { finishReason: string | null; message: { content?: unknown; refusal?: string | null } };
+  function fakeClient(choice: Choice | null) {
+    const send = vi.fn().mockResolvedValue({ model: 'm', choices: choice ? [{ index: 0, ...choice }] : [] });
+    return { client: { chat: { send } } as unknown as OpenRouter, send };
   }
   const call: ModelCall = { tier: 'strong', system: 'S', exercise: 'E', user: 'U', maxTokens: 100 };
 
-  it('caches the stable prefix and opts into refusal fallbacks on Sonnet', async () => {
-    const { client, create } = fakeClient({ content: [{ type: 'text', text: ' Hi ', citations: null }] as Anthropic.Beta.BetaContentBlock[] });
-    const r = await new ClaudeModel(client).generate(call);
-    expect(r.text).toBe('Hi');
-    const params = create.mock.calls[0][0];
-    expect(params.model).toBe('claude-sonnet-5-5');
-    expect(params.system).toEqual([{ type: 'text', text: 'S' }, { type: 'text', text: 'E', cache_control: { type: 'ephemeral' } }]);
-    expect(params.fallbacks).toBe('default');
-    expect(params.betas).toEqual(['server-side-fallback-2026-07-01']);
-    expect(params.output_config).toEqual({ effort: 'medium' });
-    expect(params.thinking).toBeUndefined();
+  it('sends the system prompt and exercise as one system message, without streaming', async () => {
+    const { client, send } = fakeClient({ finishReason: 'stop', message: { content: ' Hi ' } });
+    const signal = new AbortController().signal;
+    const r = await new OpenRouterModel(client).generate(call, signal);
+    expect(r).toEqual({ text: 'Hi', model: 'm' });
+    const [{ chatRequest }, options] = send.mock.calls[0];
+    expect(chatRequest.model).toBe(DEFAULT_MODEL);
+    expect(chatRequest.messages).toEqual([
+      { role: 'system', content: 'S\n\nE' },
+      { role: 'user', content: 'U' },
+    ]);
+    expect(chatRequest.maxTokens).toBe(100);
+    expect(chatRequest.stream).toBe(false);
+    expect(chatRequest.reasoning).toEqual({ effort: 'medium', exclude: true });
+    expect(options.signal).toBe(signal);
   });
 
-  it('uses the fast model at low effort, without fallbacks, for one-liners', async () => {
-    const { client, create } = fakeClient({ content: [{ type: 'text', text: 'x', citations: null }] as Anthropic.Beta.BetaContentBlock[] });
-    await new ClaudeModel(client).generate({ ...call, tier: 'fast', exercise: null });
-    const params = create.mock.calls[0][0];
-    expect(params.model).toBe('claude-haiku-5-5');
-    expect(params.output_config).toEqual({ effort: 'low' });
-    expect(params.fallbacks).toBeUndefined();
-    expect(params.system).toEqual([{ type: 'text', text: 'S', cache_control: { type: 'ephemeral' } }]);
+  it('uses the fast model at low effort for one-liners', async () => {
+    const { client, send } = fakeClient({ finishReason: 'stop', message: { content: [{ type: 'text', text: 'x' }] } });
+    const r = await new OpenRouterModel(client, { fast: 'f', strong: 's' }).generate({ ...call, tier: 'fast', exercise: null });
+    expect(r.text).toBe('x');
+    const { chatRequest } = send.mock.calls[0][0];
+    expect(chatRequest.model).toBe('f');
+    expect(chatRequest.reasoning.effort).toBe('low');
+    expect(chatRequest.messages[0]).toEqual({ role: 'system', content: 'S' });
   });
 
   it('reports refusals instead of reading content', async () => {
-    const { client } = fakeClient({ stop_reason: 'refusal' });
-    expect(await new ClaudeModel(client).generate(call)).toMatchObject({ refused: true });
+    expect(await new OpenRouterModel(fakeClient({ finishReason: 'content_filter', message: {} }).client).generate(call)).toMatchObject({ refused: true });
+    expect(await new OpenRouterModel(fakeClient({ finishReason: 'stop', message: { content: '', refusal: 'no' } }).client).generate(call)).toMatchObject({ refused: true });
   });
 
-  it('turns an empty max_tokens answer into a readable error', async () => {
-    const { client } = fakeClient({ stop_reason: 'max_tokens' });
-    await expect(new ClaudeModel(client).generate(call)).rejects.toThrow(/ran out of room/);
+  it('turns an empty answer into a readable error', async () => {
+    await expect(new OpenRouterModel(fakeClient({ finishReason: 'length', message: { content: null } }).client).generate(call)).rejects.toThrow(/ran out of room/);
+    await expect(new OpenRouterModel(fakeClient(null).client).generate(call)).rejects.toThrow(/empty answer/);
+  });
+
+  it('maps SDK errors to messages a learner can act on', () => {
+    expect(toTutorError(new orErrors.RequestAbortedError('aborted')).status).toBe(499);
+    expect(toTutorError(new orErrors.ConnectionError('offline')).message).toMatch(/internet/);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(toTutorError(new Error('boom')).status).toBe(502);
+    log.mockRestore();
   });
 });
 

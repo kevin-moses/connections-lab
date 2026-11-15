@@ -1,0 +1,16 @@
+{
+  "title": "Last written, first run",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "pixel", "label": "Every tile is the same: a spot near the middle of the bottom-left tile…", "at": [0.1667, 0.1667], "expect": [0.075, 0.075, 0.075], "tol": 0.03 },
+    { "type": "pixel", "label": "…looks exactly like the same spot in the top-right tile", "at": [0.8354, 0.8354], "expect": [0.075, 0.075, 0.075], "tol": 0.03 }
+  ],
+  "predict": {
+    "question": "`repeat(st, 3, 3)` is `fract(st * 3)`. At **st = (0.4, 0.75)**, what is its x?",
+    "at": [0.5, 0.5],
+    "expr": "repeat(vec2(0.4, 0.75), 3.0, 3.0).x",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**0.2.** 0.4 × 3 = 1.2, so it's 0.2 of the way across the middle tile. Once st is in tile coordinates like this, rotate turns it around (0.5, 0.5): the middle of each tile."
+  }
+}

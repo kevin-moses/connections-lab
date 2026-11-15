@@ -1,0 +1,19 @@
+{
+  "title": "Slices",
+  "variants": [{ "size": [128, 128] }],
+  "image": { "maxMismatch": 0.02 },
+  "tests": [
+    { "type": "pixel", "label": "15° (just above right): black", "at": [0.79, 0.578], "expect": [0, 0, 0], "tol": 0.02 },
+    { "type": "pixel", "label": "45°: white", "at": [0.712, 0.712], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "-15° (just below right): white", "at": [0.79, 0.422], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "165° (left, slightly up): white", "at": [0.21, 0.578], "expect": [1, 1, 1], "tol": 0.02 }
+  ],
+  "predict": {
+    "question": "What is `a` at the pixel straight **above** the center, uv = (0.5, 0.8)?",
+    "at": [0.5, 0.8],
+    "expr": "a",
+    "kind": "number",
+    "tolerance": 0.02,
+    "explain": "**About 1.57 (π/2).** A quarter turn counter-clockwise from the right. Angles are radians: π/2 ≈ 1.57, not 90."
+  }
+}

@@ -25,5 +25,7 @@ export default defineConfig({
   },
   test: {
     include: ['test/**/*.test.ts'],
+    // Lesson tests render every check image on the CPU interpreter, which is slow for the bigger shaders.
+    testTimeout: 20_000,
   },
 } as any);

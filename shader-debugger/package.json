@@ -3,17 +3,21 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"tsx watch --include .env --include 'lessons/**' server/index.ts\"",
     "dev:web": "vite",
     "dev:api": "tsx watch --include .env --include 'lessons/**' server/index.ts",
-    "build": "tsc --noEmit && vite build",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "check": "tsc --noEmit && vitest run && vite build"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.8.0",
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.13.1",
@@ -23,10 +27,13 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@lezer/highlight": "^1.2.5",
+    "@openrouter/sdk": "^1.5.103",
     "@shaderfrog/glsl-parser": "^7.0.1",
     "codemirror": "^6.0.2",
     "express": "^5.3.0",
-    "marked": "^18.2.0"
+    "marked": "^18.2.0",
+    "tsx": "^4.23.15",
+    "vite": "^8.3.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
@@ -35,9 +42,7 @@
     "concurrently": "^10.0.7",
     "p5": "^2.4.0",
     "three": "^0.187.0",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.8",
     "vitest": "^4.1.12"
   }
 }

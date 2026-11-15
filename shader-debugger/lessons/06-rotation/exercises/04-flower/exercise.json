@@ -1,0 +1,17 @@
+{
+  "title": "A flower",
+  "variants": [{ "size": [128, 128] }],
+  "tests": [
+    { "type": "pixel", "label": "A petal reaches past the old circle on the right (r = 0.3)", "at": [0.8, 0.5], "expect": [1, 0.75, 0.3], "tol": 0.03 },
+    { "type": "pixel", "label": "Between two petals (36°) is empty at r = 0.21", "at": [0.67, 0.623], "expect": [0, 0, 0], "tol": 0.03 },
+    { "type": "pixel", "label": "The middle is filled", "at": [0.5, 0.5], "expect": [1, 0.75, 0.3], "tol": 0.03 }
+  ],
+  "predict": {
+    "question": "Straight to the right of the center, `a` is 0. With five petals, what should the **edge radius** `0.25 + 0.08 * cos(5.0 * a)` be there?",
+    "at": [0.8, 0.5],
+    "expr": "0.25 + 0.08 * cos(5.0 * a)",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**0.33**, the tip of a petal: cos(0) = 1. At 36° (a fifth of a half-turn), cos(5a) = −1 and the edge pulls in to 0.17, between two petals."
+  }
+}

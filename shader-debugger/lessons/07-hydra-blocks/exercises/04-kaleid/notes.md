@@ -1,0 +1,3 @@
+Key idea: a kaleidoscope folds the angle: mod by the wedge width repeats it, abs around the wedge's middle mirrors it, and converting back from (r, angle) gives the coordinate the source reads.
+Common mistakes: forgetting abs(... - w/2) (repeats without mirroring: seams; the 120° test fails); folding with fract instead of mod; atan(p.x, p.y) (rotated); adding 0.5 back (Hydra doesn't; the tests expect the uncentred values); building the result as vec2(r, a).
+Nudges: ask what angle each test point starts at and which angle all of them should end up at; have them step into a test and watch a change.

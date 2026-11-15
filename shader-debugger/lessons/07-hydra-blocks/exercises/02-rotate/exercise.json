@@ -1,0 +1,21 @@
+{
+  "title": "rotate: a coordinate transform",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "call", "label": "The middle stays put", "call": "rotate(vec2(0.5), 1.0, 0.0)", "expect": [0.5, 0.5], "tol": 0.001 },
+    { "type": "call", "label": "A quarter turn: the point to the right of the middle reads from below it", "call": "rotate(vec2(1.0, 0.5), 1.5707963, 0.0)", "expect": [0.5, 0.0], "tol": 0.001 },
+    { "type": "call", "label": "…and the point above it reads from the right", "call": "rotate(vec2(0.5, 1.0), 1.5707963, 0.0)", "expect": [1.0, 0.5], "tol": 0.001 }
+  ],
+  "predict": {
+    "question": "Whatever the angle, where does `rotate(vec2(0.5, 0.5), 1.0, 0.0)` send the **middle** of the canvas?",
+    "at": [0.5, 0.5],
+    "expr": "rotate(vec2(0.5, 0.5), 1.0, 0.0)",
+    "kind": "choice",
+    "choices": [
+      { "label": "(0.5, 0.5): it stays in the middle", "value": [0.5, 0.5] },
+      { "label": "(0, 0): the corner", "value": [0, 0] },
+      { "label": "(0.84, 0.54): turned by 1 radian", "value": [0.84, 0.54] }
+    ],
+    "explain": "**It stays.** Hydra's rotate turns around (0.5, 0.5): it subtracts the middle, turns, and adds it back. Without that, everything would swing around the bottom-left corner."
+  }
+}

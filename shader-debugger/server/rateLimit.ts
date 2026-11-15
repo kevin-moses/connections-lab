@@ -23,3 +23,27 @@ export function rateLimit({ max, windowMs }: { max: number; windowMs: number }):
     next();
   };
 }
+
+/**
+ * A cap on all tutor requests per UTC day, whoever sends them: the most a
+ * public deploy can spend in a day. Counted in memory, so a restart resets it.
+ */
+export function dailyCap({ max, now = () => Date.now() }: { max: number; now?: () => number }): RequestHandler {
+  let day = '';
+  let count = 0;
+  return (_req, res, next) => {
+    const t = now();
+    const today = new Date(t).toISOString().slice(0, 10);
+    if (today !== day) {
+      day = today;
+      count = 0;
+    }
+    if (++count > max) {
+      const midnight = Date.parse(`${today}T00:00:00Z`) + 86_400_000;
+      res.setHeader('Retry-After', String(Math.ceil((midnight - t) / 1000)));
+      res.status(429).json({ error: "The tutor has used up today's budget. It'll be back tomorrow; the Debugger and Inspect values still work." } satisfies TutorErrorBody);
+      return;
+    }
+    next();
+  };
+}

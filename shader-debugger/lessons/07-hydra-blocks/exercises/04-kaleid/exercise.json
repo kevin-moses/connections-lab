@@ -1,0 +1,17 @@
+{
+  "title": "kaleid: folding the angle",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "call", "label": "At 30° (4 sides): folded to 15° at the same radius", "call": "kaleid(vec2(0.7598, 0.65), 4.0)", "expect": [0.2898, 0.0776], "tol": 0.001 },
+    { "type": "call", "label": "At 120°, a different wedge, it folds to the same place", "call": "kaleid(vec2(0.35, 0.7598), 4.0)", "expect": [0.2898, 0.0776], "tol": 0.001 },
+    { "type": "call", "label": "Below the middle (-60°) too: every wedge looks the same", "call": "kaleid(vec2(0.65, 0.2402), 4.0)", "expect": [0.2898, 0.0776], "tol": 0.001 }
+  ],
+  "predict": {
+    "question": "With **4 sides**, how wide is each wedge, `2π / nSides`, in radians?",
+    "at": [0.5, 0.5],
+    "expr": "6.2831853 / 4.0",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**About 1.57** (π/2, a quarter turn). The fold maps every quarter onto the first one, mirrored around its middle, which is what makes the pattern symmetric."
+  }
+}

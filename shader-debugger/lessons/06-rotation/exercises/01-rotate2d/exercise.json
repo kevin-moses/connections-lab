@@ -1,0 +1,22 @@
+{
+  "title": "A rotation matrix",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "call", "label": "A quarter turn takes (1, 0) to (0, 1)", "call": "rotate2d(1.5707963) * vec2(1.0, 0.0)", "expect": [0, 1], "tol": 0.001 },
+    { "type": "call", "label": "A half turn takes (0, 1) to (0, -1)", "call": "rotate2d(3.1415927) * vec2(0.0, 1.0)", "expect": [0, -1], "tol": 0.001 },
+    { "type": "call", "label": "No turn leaves a vector alone", "call": "rotate2d(0.0) * vec2(0.3, 0.4)", "expect": [0.3, 0.4], "tol": 0.001 },
+    { "type": "call", "label": "An eighth of a turn: (1, 0) to (0.707, 0.707)", "call": "rotate2d(0.785398) * vec2(1.0, 0.0)", "expect": [0.7071, 0.7071], "tol": 0.001 }
+  ],
+  "predict": {
+    "question": "With the starter's `rotate2d` (which returns `mat2(1.0)`), what is `rotate2d(0.785398) * vec2(1.0, 0.0)`?",
+    "at": [0.5, 0.5],
+    "expr": "rotate2d(0.785398) * vec2(1.0, 0.0)",
+    "kind": "choice",
+    "choices": [
+      { "label": "(1, 0): unchanged", "value": [1, 0] },
+      { "label": "(0.71, 0.71): turned 45°", "value": [0.7071, 0.7071] },
+      { "label": "(0, 1): turned 90°", "value": [0, 1] }
+    ],
+    "explain": "**Unchanged.** `mat2(1.0)` is the identity matrix: 1s down the diagonal, 0s elsewhere, so it leaves every vector as it was. That's why the starter shows a plain square."
+  }
+}

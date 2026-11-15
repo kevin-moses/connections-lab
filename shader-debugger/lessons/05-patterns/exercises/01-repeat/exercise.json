@@ -1,0 +1,17 @@
+{
+  "title": "Repeat it",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "pixel", "label": "The middle of the bottom-left tile is white", "at": [0.125, 0.125], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "The middle of the top-right tile is white", "at": [0.875, 0.875], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "Where four tiles meet is black", "at": [0.5, 0.5], "expect": [0, 0, 0], "tol": 0.02 }
+  ],
+  "predict": {
+    "question": "At the pixel with **uv.x = 0.6**, what is `fract(uv.x * 4.0)`?",
+    "at": [0.6, 0.5],
+    "expr": "fract(uv.x * 4.0)",
+    "kind": "number",
+    "tolerance": 0.02,
+    "explain": "**0.4.** uv.x × 4 = 2.4: that's tile 2 (counting from 0), and 0.4 of the way across it. `fract` throws away the 2."
+  }
+}

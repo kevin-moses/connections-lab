@@ -1,0 +1,23 @@
+{
+  "title": "Spin it",
+  "animated": true,
+  "variants": [
+    { "size": [96, 96], "time": 0.0 },
+    { "time": 0.5 },
+    { "time": 1.5708 },
+    { "time": 2.5 }
+  ],
+  "tests": [
+    { "type": "pixel", "label": "After a quarter turn the bar stands upright: above the center is white", "at": [0.5, 0.75], "expect": [1, 1, 1], "tol": 0.02, "variant": { "time": 1.5708 } },
+    { "type": "pixel", "label": "…and to the right of the center is black", "at": [0.75, 0.5], "expect": [0, 0, 0], "tol": 0.02, "variant": { "time": 1.5708 } },
+    { "type": "pixel", "label": "Counter-clockwise: at u_time = 0.5, up-and-right of the center is white", "at": [0.7, 0.61], "expect": [1, 1, 1], "tol": 0.02, "variant": { "time": 0.5 } }
+  ],
+  "predict": {
+    "question": "Spinning at 1 radian per second, how many seconds does **one full turn** take?",
+    "at": [0.5, 0.5],
+    "expr": "2.0 * 3.1415927",
+    "kind": "number",
+    "tolerance": 0.05,
+    "explain": "**About 6.28 seconds.** A full turn is 2π radians, not 360: GLSL's sin, cos and rotations all work in radians."
+  }
+}

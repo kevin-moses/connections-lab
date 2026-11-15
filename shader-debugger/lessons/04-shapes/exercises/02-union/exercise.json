@@ -1,0 +1,17 @@
+{
+  "title": "Two shapes as one",
+  "variants": [{ "size": [96, 96] }],
+  "tests": [
+    { "type": "region", "label": "No seam: nothing is brighter than the shape's orange", "rect": [0.3, 0.3, 0.7, 0.7], "channel": "b", "max": 0.31 },
+    { "type": "pixel", "label": "Where the two overlap, it's the same orange as inside either one", "at": [0.5, 0.5], "expect": [1, 0.6, 0.3], "tol": 0.03 },
+    { "type": "pixel", "label": "Outside both is black", "at": [0.5, 0.85], "expect": [0, 0, 0], "tol": 0.02 }
+  ],
+  "predict": {
+    "question": "On the starter, the middle pixel is inside **both** discs. What is `shape` there?",
+    "at": [0.5, 0.5],
+    "expr": "shape",
+    "kind": "number",
+    "tolerance": 0.02,
+    "explain": "**2.** Each disc adds 1. The color is multiplied by 2 and clamped on screen, which is the seam: the blue channel 0.3 × 2 = 0.6 comes out brighter than anywhere else."
+  }
+}

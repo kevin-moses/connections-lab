@@ -6,10 +6,12 @@ Learn GLSL by seeing what every line does. See [PROPOSAL.md](PROPOSAL.md) for th
 
 ```bash
 npm install
-cp .env.example .env   # then add ANTHROPIC_API_KEY for the tutor
+cp .env.example .env   # then add OPENROUTER_API_KEY for the tutor
 npm run dev        # Vite on :5173 + tutor proxy on :3001 (proxied at /api)
 npm test           # unit tests
+npm run test:e2e   # browser tests in your installed Chrome
 npm run typecheck
+npm run build && npm start   # production: one server for the app and the tutor (PORT, default 3001)
 ```
 
 ## Status: M0 (skeleton) ✅
@@ -55,7 +57,7 @@ Not yet in the stepper: textures (`texture()`), derivatives (`dFdx`/`fwidth`), s
 
 The app opens in **Lessons** mode (switch to **Sandbox** in the top bar for free play; each mode keeps its own code).
 
-- **Lessons 1–3, 14 exercises:** coordinates & uv (red ramp, uv as color with p5's flipped y, centering, aspect ratio), color (p5 colors, swizzles, `mix`, out-of-range values, `u_time`), and step & thresholds (hard edges, bands, rectangles, a `rect()` function, `smoothstep`).
+- **Lessons 1–3, 14 exercises** (lessons 4–6 below): coordinates & uv (red ramp, uv as color with p5's flipped y, centering, aspect ratio), color (p5 colors, swizzles, `mix`, out-of-range values, `u_time`), and step & thresholds (hard edges, bands, rectangles, a `rect()` function, `smoothstep`).
 - Each exercise has a prompt written for p5 users, a **predict-then-reveal** question (answer it, then the stepper opens on that exact pixel), a live **target preview**, and a **live checklist** that re-runs as you type.
 - Checks: an **image diff** against the hidden reference under several setups (canvas sizes, times, mouse positions), with yours / target / red-difference thumbnails when it fails; **pixel**, **region** and **increasing** probes; and **function tests** that call your GLSL function on the CPU, each with **Step into this call**.
 - Lesson canvases have an exact pixel size (e.g. 400×400, 600×300), so "the pixel at x = 100" means what it says.
@@ -65,7 +67,7 @@ Lesson files live in `lessons/<NN-lesson>/exercises/<NN-exercise>/` (`exercise.j
 
 ## Status: M4 (tutor) ✅ (needs an API key)
 
-The tutor explains, hints and decodes errors. It never writes your exercise code. Add `ANTHROPIC_API_KEY` to `.env` and restart `npm run dev`; until then, tutor requests say how to connect. (`curl localhost:5173/api/health` shows whether it's live.)
+The tutor explains, hints and decodes errors. It never writes your exercise code. Add `OPENROUTER_API_KEY` to `.env` and restart `npm run dev`; until then, tutor requests say how to connect. (`curl localhost:5173/api/health` shows whether it's live.)
 
 - **Explain** on each compile error in Problems: what the GPU's terse message means and where to look.
 - **Hover docs and completion** for every GLSL built-in and the app's inputs (`u_time`, `fragColor`, …), from `shared/glslReference.ts`. The tutor gets the same entries for the built-ins in your code, so its explanations match the docs. Examples are tested not to match any exercise's solution.
@@ -76,7 +78,7 @@ How it stays a teacher, not a coder:
 - The server reads the exercise prompt and **teacher notes** (`notes.md`) from disk. It never opens `reference.glsl`; a test checks that no solution line reaches any prompt.
 - In exercises, every answer is screened (`server/tutor/filter.ts`): code blocks, statements, and expressions built from your variables (`bandX * bandY`) are refused, while names, built-ins on placeholders (`step(edge, x)`) and quotes of your own code are fine. A refused answer is retried once with a stricter instruction, then replaced by a canned nudge toward the Debugger. The sandbox allows tiny snippets.
 
-Models (override in `.env`): `claude-sonnet-5-5` at medium effort for hints and errors (a cheaper `fast` tier is configured but unused since Explain lines was removed), with the server-side refusal fallback on. `TUTOR_PROVIDER=stub` turns model calls off. The browser only talks to `/api/tutor`; `LanguageModel` (`server/tutor/provider.ts`) is the swappable piece.
+Model (override in `.env`): the free `nvidia/nemotron-3-ultra-550b-a55b:free` on [OpenRouter](https://openrouter.ai), at medium reasoning effort for hints and errors (a `fast` tier is configured but unused since Explain lines was removed). Free models are rate-limited by OpenRouter (per minute and per day), and their providers may log prompts, which include the learner's code. `TUTOR_PROVIDER=stub` turns model calls off. The browser only talks to `/api/tutor`; `LanguageModel` (`server/tutor/provider.ts`) is the swappable piece.
 
 The proxy listens on 127.0.0.1 only and limits each client to `TUTOR_RATE_LIMIT` requests a minute (default 60). Not yet: a bring-your-own-key field (needed before deploying anywhere public).
 
@@ -117,6 +119,49 @@ In the sandbox, switch **2D canvas / 3D mesh** in the top bar. Mesh mode draws a
 - **Click a vertex to step through the vertex shader for it**, with inline values, the variables panel (attributes, uniforms, `gl_Position` and the varyings), step over/out, and Shift-click to compare two vertices. The **GPU cross-check** reads every vertex's real `gl_Position` back with transform feedback and compares. Picking uses those positions too, so you can click a displaced vertex where it actually is.
 
 Not yet in mesh mode: Inspect values, stepping a fragment on the mesh (that's Stage 3, the rasterizer bridge), the language dropdown, export, and lessons. Those are the next slices.
+
+## Lessons 4–6 ✅
+
+Twelve more exercises, built like lessons 1–3 (each with a prediction, a live checklist and teacher notes for the tutor):
+- **4. Shapes with distance**: a ring with `abs(d − r)`; two discs merged by taking the smaller distance; a square from `max(abs(p.x), abs(p.y))`; inside, outside and an outline from one signed distance.
+- **5. Patterns and tiling**: repeat with `fract`; a checkerboard from `floor` and `mod`; a different circle per tile; bricks offset every other row.
+- **6. Rotation and polar coordinates**: write `rotate2d()` (GLSL's `mat2` is column-major; function tests check it); spin a bar with `u_time` (and the inverse-rotation surprise); twelve slices with `atan`; a five-petal flower from `r(a)`.
+
+Each one is tested like the rest: the reference passes and the starter fails every check, each prediction matches its explanation, each converts to p5 and Shadertoy style and still passes, and no teacher note quotes the solution.
+
+## Lessons 7–8: Hydra ✅
+
+How [Hydra](https://hydra.ojack.xyz)'s functions are built from GLSL, and how its chains become nested calls:
+- **7. Hydra's building blocks**: write `osc` (three phase-shifted sines), `rotate` (a coordinate transform, so it goes *inside* the source), `brightness` and `invert` (color functions, so they wrap *outside*, in the order written), and `kaleid` (folding the angle).
+- **8. Stacking like Hydra**: coordinate transforms run last-written first (`osc().rotate().repeat()` is `osc(rotate(repeat(st)))`); `diff` combines two chains' colors; `modulate` uses one chain's color to move another's coordinates; then translate a whole sketch, `osc(30, 0.1, 1.2).kaleid(5).rotate(0, 0.3).color(1.0, 0.6, 0.9)`, into one nested expression.
+
+The GLSL is our own, written to match the behaviour documented in hydra-synth's source (parameter names, defaults, Hydra's `st` and `time`), not copied from it: hydra-synth is AGPL-3.0. The lessons credit Hydra and Olivia Jack. Function tests check each piece. A test also confirms that likely mistakes fail: the wrong transform order, colors in the wrong order, `kaleid` without the mirror, and modulating the color instead of the coordinates.
+
+## Deploy (Railway)
+
+In production, one Express server serves the built app (`dist/`) and the tutor API. `npm run build` builds the app (just Vite; run `npm run typecheck` and the tests before pushing). `npm start` runs the server with `NODE_ENV=production`, which means it:
+- listens on `0.0.0.0:$PORT`;
+- trusts one proxy hop, so per-client limits see real addresses;
+- caches hashed assets for a year and always revalidates `index.html`;
+- sends `nosniff`, `Referrer-Policy` and `X-Frame-Options` headers.
+
+Railway's default builder (Railpack) finds both scripts in `package.json`, so there's no config file. Railway no longer reads `railway.json` for new services. Set up the service once:
+
+1. **New Project → Deploy from GitHub repo →** `connections-lab`.
+2. In the service's **Settings**:
+   - **Root Directory** `shader-debugger`;
+   - **Healthcheck Path** `/api/health`;
+   - optionally a domain under **Networking → Generate Domain**.
+3. **Variables**:
+   - `OPENROUTER_API_KEY` (your key);
+   - optionally `TUTOR_DAILY_LIMIT` (default 300 requests a day for everyone together) and `TUTOR_RATE_LIMIT` (default 20 a minute per visitor).
+
+   Without a key the app still works, and the tutor says it isn't connected.
+4. Push to the branch Railway watches. Every push redeploys.
+
+`engines.node` pins Node 24 (LTS). The daily cap is counted in memory, so a restart resets it.
+
+What's public on purpose: the lesson reference solutions are in the browser bundle, because the checker renders them there. They're hidden in the UI but readable in devtools. The teacher notes stay on the server.
 
 ## Layout
 

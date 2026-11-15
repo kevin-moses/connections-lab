@@ -1,0 +1,17 @@
+{
+  "title": "Color functions, in order",
+  "variants": [{ "size": [96, 32] }],
+  "tests": [
+    { "type": "call", "label": "brightness adds to every color channel, not alpha", "call": "brightness(vec4(0.5, 0.2, 0.9, 1.0), 0.2)", "expect": [0.7, 0.4, 1.1, 1], "tol": 0.001 },
+    { "type": "call", "label": "invert(…, 1.0) flips each channel", "call": "invert(vec4(0.2, 0.6, 1.0, 1.0), 1.0)", "expect": [0.8, 0.4, 0, 1], "tol": 0.001 },
+    { "type": "call", "label": "invert(…, 0.5) goes halfway: everything lands on 0.5", "call": "invert(vec4(0.2, 0.6, 1.0, 1.0), 0.5)", "expect": [0.5, 0.5, 0.5, 1], "tol": 0.001 }
+  ],
+  "predict": {
+    "question": "Where osc is exactly 0.5, what does `osc(8).brightness(0.2).invert()` show? (Brighten first, then invert.)",
+    "at": [0.5, 0.5],
+    "expr": "1.0 - (0.5 + 0.2)",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**0.3.** 0.5 + 0.2 = 0.7, then 1 − 0.7 = 0.3. In the other order (invert, then brighten) you'd get 0.7: color functions don't commute, so the order you write them in matters."
+  }
+}

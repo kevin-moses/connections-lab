@@ -7,6 +7,6 @@ export class StubModel implements LanguageModel {
   readonly live = false;
 
   async generate(_call: ModelCall, _signal?: AbortSignal): Promise<ModelResult> {
-    throw new TutorError('The tutor is not connected. Add ANTHROPIC_API_KEY to .env and restart `npm run dev`.', 503);
+    throw new TutorError('The tutor is not connected. Add OPENROUTER_API_KEY to .env and restart `npm run dev`.', 503);
   }
 }

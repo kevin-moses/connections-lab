@@ -1,0 +1,17 @@
+{
+  "title": "A different circle in every tile",
+  "variants": [{ "size": [128, 128] }],
+  "tests": [
+    { "type": "pixel", "label": "First column: 0.2 from a tile's center is outside (radius 0.1)", "at": [0.175, 0.125], "expect": [0, 0, 0], "tol": 0.02 },
+    { "type": "pixel", "label": "Last column: 0.35 from a tile's center is inside (radius 0.4)", "at": [0.9625, 0.625], "expect": [1, 1, 1], "tol": 0.02 },
+    { "type": "pixel", "label": "Third column: 0.25 from the center is inside (radius 0.3)", "at": [0.6875, 0.375], "expect": [1, 1, 1], "tol": 0.02 }
+  ],
+  "predict": {
+    "question": "Which column is the pixel at **uv = (0.6, 0.1)** in? What is `id.x` there?",
+    "at": [0.6, 0.1],
+    "expr": "id.x",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**2.** 0.6 × 4 = 2.4, so it's the third column (counting from 0). Its circle should have radius 0.1 + 0.1 × 2 = 0.3."
+  }
+}

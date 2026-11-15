@@ -1,0 +1,16 @@
+{
+  "title": "Translate a Hydra sketch",
+  "animated": true,
+  "variants": [{ "size": [64, 64], "time": 0 }, { "time": 1.5 }, { "time": 4.0 }],
+  "tests": [
+    { "type": "region", "label": "color(1.0, 0.6, 0.9) keeps green at 0.6 or below everywhere", "rect": [0, 0, 1, 1], "channel": "g", "max": 0.61 }
+  ],
+  "predict": {
+    "question": "`rotate(0, 0.3)` turns at 0.3 radians per second. How many seconds does one full turn take?",
+    "at": [0.5, 0.5],
+    "expr": "6.2831853 / 0.3",
+    "kind": "number",
+    "tolerance": 0.2,
+    "explain": "**About 21 seconds** (2π / 0.3). Hydra's speeds are radians per second, like everything in GLSL."
+  }
+}

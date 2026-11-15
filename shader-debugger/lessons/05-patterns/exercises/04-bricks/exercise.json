@@ -1,0 +1,17 @@
+{
+  "title": "Bricks",
+  "variants": [{ "size": [128, 128] }],
+  "tests": [
+    { "type": "pixel", "label": "Second row: a joint now sits an eighth of the way across", "at": [0.13, 0.19], "expect": [0.85, 0.82, 0.78], "tol": 0.02 },
+    { "type": "pixel", "label": "Bottom row: unchanged, still clay there", "at": [0.13, 0.06], "expect": [0.7, 0.3, 0.2], "tol": 0.02 },
+    { "type": "pixel", "label": "Second row: no joint at a quarter of the way across any more", "at": [0.255, 0.19], "expect": [0.7, 0.3, 0.2], "tol": 0.02 }
+  ],
+  "predict": {
+    "question": "The pixel at **uv.y = 0.19** is in the second row from the bottom. What is `mod(floor(st.y), 2.0)` there?",
+    "at": [0.5, 0.19],
+    "expr": "mod(floor(st.y), 2.0)",
+    "kind": "number",
+    "tolerance": 0.01,
+    "explain": "**1.** st.y = 0.19 × 8 = 1.52, so floor gives row 1, which is odd: mod 2 is 1. Even rows give 0. That 0-or-1 is exactly how much of a half-brick shift each row needs."
+  }
+}

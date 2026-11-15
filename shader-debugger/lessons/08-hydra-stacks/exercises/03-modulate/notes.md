@@ -1,0 +1,3 @@
+Key idea: modulation is a coordinate transform driven by another chain's color: the second chain is evaluated at st, and its red/green offsets the st the first source reads.
+Common mistakes: modulating the color instead of the coordinates (adding the colors: no bending); evaluating the inner osc at the already-modulated st; forgetting the rotate (the inner stripes are vertical too, so each column shifts evenly: no waves); amount on the wrong call.
+Nudges: ask what the inner chain's red is at the top and bottom of the canvas, and how far that pushes st.x; have them step into modulate at two pixels in the same column.
