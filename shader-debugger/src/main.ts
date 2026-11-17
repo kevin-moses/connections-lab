@@ -1,5 +1,9 @@
 import '@fontsource-variable/dm-sans';
 import './style.css';
+import pauseIcon from './icons/pause.svg?raw';
+import playIcon from './icons/play.svg?raw';
+import reloadIcon from './icons/reload.svg?raw';
+import fullScreenIcon from './icons/full-screen.svg?raw';
 import { createEditor } from './editor/editor';
 import type { Program } from '@shaderfrog/glsl-parser/ast';
 import { parseGlsl, type ParseResult } from './glsl/parse';
@@ -33,6 +37,7 @@ const ui = {
   editor: $('editor'),
   play: $<HTMLButtonElement>('play'),
   resetTime: $<HTMLButtonElement>('reset-time'),
+  fullscreen: $<HTMLButtonElement>('fullscreen'),
   resetCode: $<HTMLButtonElement>('reset-code'),
   time: $('time'),
   res: $('res'),
@@ -50,6 +55,10 @@ const ui = {
   fileName: $('file-name'),
   lessonPane: $('lesson-pane'),
 };
+
+ui.play.innerHTML = pauseIcon;
+ui.resetTime.innerHTML = reloadIcon;
+ui.fullscreen.innerHTML = fullScreenIcon;
 
 // ---------- persistence (per-viewer convenience; may be unavailable) ----------
 
@@ -460,13 +469,37 @@ function fitCanvas() {
     return;
   }
   const wrap = canvas.parentElement!;
-  const pad = 28;
+  const full = document.fullscreenElement === wrap || wrap.classList.contains('fill-window');
+  const pad = full ? 0 : 28;
   const scale = Math.min((wrap.clientWidth - pad) / size[0], (wrap.clientHeight - pad) / size[1]);
   canvas.classList.add('fixed');
   canvas.style.width = `${Math.max(1, size[0] * scale)}px`;
   canvas.style.height = `${Math.max(1, size[1] * scale)}px`;
 }
 new ResizeObserver(fitCanvas).observe(ui.canvas.parentElement!);
+
+// Full screen takes the whole canvas area, so the pixel markers, the hover
+// readout and click-to-debug keep working. Esc exits. Where the browser
+// refuses (an embedding iframe, iOS Safari), the area fills the window instead.
+ui.fullscreen.addEventListener('click', () => {
+  const wrap = ui.canvas.parentElement!;
+  if (!document.fullscreenEnabled) {
+    wrap.classList.add('fill-window');
+    return;
+  }
+  wrap.requestFullscreen().catch(() => wrap.classList.add('fill-window'));
+});
+// Capture phase, so this Esc only leaves full screen and doesn't also close the debugger.
+window.addEventListener(
+  'keydown',
+  (e) => {
+    const wrap = ui.canvas.parentElement!;
+    if (e.key !== 'Escape' || !wrap.classList.contains('fill-window')) return;
+    wrap.classList.remove('fill-window');
+    e.stopImmediatePropagation();
+  },
+  true,
+);
 
 function compile(source: string) {
   if (!runner) return;
@@ -526,8 +559,9 @@ if (runner) {
 
   ui.play.addEventListener('click', () => {
     r.setPlaying(!r.isPlaying);
-    ui.play.textContent = r.isPlaying ? 'Pause' : 'Play';
+    ui.play.innerHTML = r.isPlaying ? pauseIcon : playIcon;
     ui.play.title = r.isPlaying ? 'Pause time' : 'Resume time';
+    ui.play.ariaLabel = ui.play.title;
   });
   ui.resetTime.addEventListener('click', () => r.resetTime());
 }

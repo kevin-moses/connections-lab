@@ -19,11 +19,14 @@
         <select id="mesh-select" class="style-select" aria-label="Mesh" title="Which mesh to draw" hidden></select>
       </div>
       <div class="transport">
-        <button id="play" class="btn" title="Pause time">Pause</button>
-        <button id="reset-time" class="btn" title="Reset u_time to 0">Reset time</button>
         <span class="readout"><span class="label">u_time</span> <span id="time">0.00</span></span>
         <span class="readout"><span class="label">res</span> <span id="res">–</span></span>
         <span class="readout"><span class="label">fps</span> <span id="fps">–</span></span>
+      </div>
+      <div class="controls">
+        <button id="play" class="btn btn-icon" title="Pause time" aria-label="Pause time"></button>
+        <button id="reset-time" class="btn btn-icon" title="Reset u_time to 0" aria-label="Reset time"></button>
+        <button id="fullscreen" class="btn btn-icon" title="Show the canvas full screen (Esc to exit)" aria-label="Full screen"></button>
       </div>
       <div class="status">
         <span id="status-compile" class="pill" title="GPU compile status">GPU …</span>
