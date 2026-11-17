@@ -5,6 +5,6 @@ A Hydra sketch is one long chain, and the shader Hydra writes for it is just tho
 - **Color functions** (`invert`, `brightness`, `color`, …) wrap the result *in the order you wrote them*.
 - **Coordinate transforms** (`rotate`, `repeat`, `kaleid`, …) change `st` *before* the source reads it, and they run **last-written first**: `osc().rotate().repeat()` is `osc(rotate(repeat(st)))`.
 - **Combining** (`add`, `diff`, `blend`, …) takes a second chain's color.
-- **Modulating** (`modulate`, …) uses a second chain's color to push the **coordinates** around.
+- **Modulating** (`modulate`, …) uses a second chain's color to shift the **coordinates**.
 
 The functions you wrote in lesson 7 are already in each starter.

@@ -239,7 +239,6 @@ export class LessonController {
     const i = all.findIndex((e) => e.id === ex.id);
     ui.prev.disabled = i <= 0;
     ui.next.disabled = i >= all.length - 1;
-    ui.next.classList.toggle('btn-primary', !!progress.exercises[ex.id]?.passed);
   }
 
   private renderChecks(justPassed: boolean): void {

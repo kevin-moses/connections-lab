@@ -1,3 +1,4 @@
+import '@fontsource-variable/dm-sans';
 import './style.css';
 import { createEditor } from './editor/editor';
 import type { Program } from '@shaderfrog/glsl-parser/ast';

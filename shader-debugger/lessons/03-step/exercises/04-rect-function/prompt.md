@@ -10,4 +10,4 @@ It should return **1.0 inside** the box from corner `lo` to corner `hi`, and **0
 
 Tip: `step` works on vectors one component at a time. `step(lo, uv)` gives a `vec2` with x and y handled at once. Combine the components at the end.
 
-This exercise is checked with **function tests** that call your `rect()` directly. If one fails, click **Step into** to watch that exact call run.
+**Function tests** check this exercise by calling your `rect()` directly. If one fails, click **Step into** to watch that exact call run.
