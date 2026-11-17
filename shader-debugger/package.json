@@ -26,6 +26,7 @@
     "@codemirror/search": "^6.7.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
+    "@fontsource-variable/dm-sans": "^5.3.0",
     "@lezer/highlight": "^1.2.5",
     "@openrouter/sdk": "^1.5.103",
     "@shaderfrog/glsl-parser": "^7.0.1",

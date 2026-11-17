@@ -11,36 +11,36 @@ import type { ShaderDiagnostic } from '../glsl/diagnostics';
 
 const theme = EditorView.theme(
   {
-    '&': { height: '100%', backgroundColor: 'var(--editor-bg)', color: 'var(--text)' },
+    '&': { height: '100%', backgroundColor: 'var(--editor-bg)', color: 'var(--code-text)' },
     '.cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '13.5px', lineHeight: '1.6' },
-    '.cm-content': { caretColor: 'var(--accent)' },
-    '.cm-cursor': { borderLeftColor: 'var(--accent)' },
+    '.cm-content': { caretColor: 'var(--code-accent)' },
+    '.cm-cursor': { borderLeftColor: 'var(--code-accent)' },
     '.cm-gutters': {
       backgroundColor: 'var(--editor-bg)',
-      color: 'var(--text-faint)',
+      color: 'var(--code-text-faint)',
       border: 'none',
     },
     '.cm-activeLine': { backgroundColor: 'var(--active-line)' },
-    '.cm-activeLineGutter': { backgroundColor: 'var(--active-line)', color: 'var(--text-dim)' },
+    '.cm-activeLineGutter': { backgroundColor: 'var(--active-line)', color: 'var(--code-text-dim)' },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
       backgroundColor: 'var(--selection) !important',
     },
     '.cm-tooltip': {
       backgroundColor: 'var(--panel)',
       border: '1px solid var(--border)',
-      color: 'var(--text)',
+      color: 'var(--code-text)',
     },
     '.cm-glsl-doc': { maxWidth: '360px', padding: '6px 8px', fontSize: '12.5px', lineHeight: '1.45', display: 'grid', gap: '4px' },
     '.cm-glsl-sig': { fontFamily: 'var(--font-mono)', color: 'var(--syn-type)', whiteSpace: 'pre-wrap' },
-    '.cm-glsl-example': { fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' },
+    '.cm-glsl-example': { fontFamily: 'var(--font-mono)', color: 'var(--code-text-dim)' },
     '.cm-glsl-note': { color: 'var(--warn)' },
-    '.cm-glsl-doc a': { color: 'var(--accent)', justifySelf: 'start' },
+    '.cm-glsl-doc a': { color: 'var(--code-accent)', justifySelf: 'start' },
     '.cm-diagnostic-error': { borderLeftColor: 'var(--error)' },
-    '.cm-probe-line': { backgroundColor: 'var(--probe-line)', boxShadow: 'inset 2px 0 0 var(--accent)' },
+    '.cm-probe-line': { backgroundColor: 'var(--probe-line)', boxShadow: 'inset 2px 0 0 var(--code-accent)' },
     '.cm-probe-expr': {
       backgroundColor: 'var(--probe-expr)',
       borderRadius: '2px',
-      outline: '1px solid color-mix(in srgb, var(--accent) 55%, transparent)',
+      outline: '1px solid color-mix(in srgb, var(--code-accent) 55%, transparent)',
     },
     '.cm-exec-line': { backgroundColor: 'var(--exec-line)', boxShadow: 'inset 3px 0 0 var(--exec)' },
     // A background *image* so it layers with the exec line's background color.
@@ -56,9 +56,9 @@ const theme = EditorView.theme(
       backgroundColor: 'var(--inline-value-bg)',
       whiteSpace: 'pre',
     },
-    '.cm-inline-value.current': { color: 'var(--text)', backgroundColor: 'var(--exec-chip)' },
+    '.cm-inline-value.current': { color: 'var(--code-text)', backgroundColor: 'var(--exec-chip)' },
     '.cm-inline-value .b': { color: 'var(--pixel-b)' },
-    '.cm-inline-value .sep': { color: 'var(--text-faint)', margin: '0 6px' },
+    '.cm-inline-value .sep': { color: 'var(--code-text-faint)', margin: '0 6px' },
     '.cm-lintRange-error': {
       backgroundImage: 'none',
       textDecoration: 'underline wavy var(--error)',
@@ -76,7 +76,7 @@ const highlight = HighlightStyle.define([
   { tag: t.number, color: 'var(--syn-number)' },
   { tag: t.comment, color: 'var(--syn-comment)', fontStyle: 'italic' },
   { tag: t.meta, color: 'var(--syn-meta)' },
-  { tag: t.operator, color: 'var(--text-dim)' },
+  { tag: t.operator, color: 'var(--code-text-dim)' },
 ]);
 
 /** Where the value-as-image probe is attached, for highlighting. */
