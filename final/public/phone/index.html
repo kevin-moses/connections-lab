@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1216">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Breathe sensor</title>
+    <link rel="manifest" href="/phone/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/phone/icon-192.png">
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+        h1 { margin: 0; font-weight: 500; }
+        p { margin: 0; color: var(--muted); max-width: 320px; }
+        form { display: flex; gap: 8px; }
+        input { font: inherit; font-size: 28px; width: 6ch; text-align: center; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+        button.big { font-size: 20px; padding: 14px 40px; border-radius: 999px; }
+        #level { width: 220px; height: 8px; border-radius: 4px; background: var(--card); overflow: hidden; }
+        #level div { height: 100%; width: 50%; background: var(--inhale); transition: width 0.1s; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <h1 id="title">Breathe</h1>
+    <p id="message"></p>
+
+    <form id="code-form" hidden>
+        <input id="code-input" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="CODE">
+        <button type="submit">Pair</button>
+    </form>
+
+    <button id="start" class="big" type="button" hidden>Start</button>
+    <div id="level" hidden><div></div></div>
+    <button id="stop" type="button" hidden>Stop</button>
+    <p id="peer"></p>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/phone/phone.js"></script>
+</body>
+</html>

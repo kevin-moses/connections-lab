@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breathe</title>
+    <link rel="icon" href="/phone/icon-192.png">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <span id="status" class="pill">waiting for phone</span>
+        <button id="settings-toggle" type="button">Tune</button>
+    </header>
+
+    <main>
+        <div id="orb"></div>
+        <p id="phase">&nbsp;</p>
+        <p id="stats"><span id="bpm">-- bpm</span> · <span id="count">0 breaths</span></p>
+    </main>
+
+    <canvas id="graph"></canvas>
+
+    <section id="pair">
+        <div class="card">
+            <h1>Breathe</h1>
+            <p>Scan with your phone to pair.</p>
+            <div id="qr"></div>
+            <p id="code">····</p>
+            <p id="pair-url"></p>
+            <p id="pair-warning" hidden></p>
+            <p class="hint">Sit upright. Hold the phone flat against your chest, screen facing out, top of the phone pointing up.</p>
+        </div>
+    </section>
+
+    <aside id="panel" hidden>
+        <div id="controls"></div>
+        <pre id="readout"></pre>
+        <div class="actions">
+            <button id="reset" type="button">Reset defaults</button>
+            <button id="show-pair" type="button">Show pairing</button>
+        </div>
+    </aside>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/desktop.js"></script>
+</body>
+</html>
