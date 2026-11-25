@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { createDetector } from "../public/breath.js";
 import { PARAMS } from "../public/params.js";
 
-const params = Object.fromEntries(PARAMS.map((d) => [d.key, d.value]));
+const defaults = Object.fromEntries(PARAMS.map((d) => [d.key, d.value]));
+// Pinned so retuning the slider defaults never changes what the mechanics checks mean.
+const params = {
+    ...defaults, axis: "auto", invert: false, smoothing: 0.35, envelope: 12, gain: 1,
+    noiseFloor: 0.03, threshold: 0.2, minPhase: 0.8, warmup: 3,
+};
 const G = 9.81;
 const HZ = 60;
 
@@ -42,7 +47,13 @@ const plain = run({ seconds: 20, bpm: 12, tiltDeg: 0.8, noise: 0.01 });
 const at = HZ * 16;
 assert.notEqual(inverted.phases[at], plain.phases[at], "invert flips the phase");
 
+const slow = run({ seconds: 90, bpm: 8, tiltDeg: 0.8, noise: 0.03, p: defaults });
+assert.ok(Math.abs(slow.reading.bpm - 8) < 0.5, `shipped defaults read ${slow.reading.bpm?.toFixed(2)} bpm for 8 bpm`);
+const slowNoise = run({ seconds: 60, bpm: 8, tiltDeg: 0, noise: 0.03, p: defaults });
+assert.equal(slowNoise.reading.breaths, 0, "shipped defaults count no breaths in noise");
+
 console.log("detector ok", {
+    defaults8: slow.reading.bpm.toFixed(2),
     bpm12: breathing.reading.bpm.toFixed(2), breaths12: breathing.reading.breaths,
     bpm20: fast.reading.bpm.toFixed(2), noiseBreaths: still.reading.breaths,
 });
